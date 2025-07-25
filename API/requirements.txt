@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pandas
+sentence-transformers
+google-genai
+redis
+dotenv
+itsdangerous

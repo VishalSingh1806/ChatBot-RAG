@@ -1,0 +1,91 @@
+# ----------------------------
+# Python backend (FastAPI)
+# ----------------------------
+
+# Bytecode and compiled files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environment
+venv/
+env/
+
+# Environment variables
+.env
+.env.*
+
+# VSCode or PyCharm IDE configs
+.vscode/
+.idea/
+
+# Logs and cache
+*.log
+*.sqlite3
+*.db
+*.bak
+*.swp
+.cache/
+*.pid
+
+# Redis dump files (if any)
+dump.rdb
+
+# Uvicorn reload artifacts
+*.reload
+
+# ----------------------------
+# Node frontend (React/Vite)
+# ----------------------------
+
+# Build output
+frontend/dist/
+dist/
+
+# Dependency folders
+node_modules/
+frontend/node_modules/
+
+# Local dev/preview output
+*.local
+*.preview
+*.temp
+
+# Environment configs
+frontend/.env
+frontend/.env.*
+
+# Build cache
+frontend/.vite/
+.vite/
+*.tsbuildinfo
+
+# ----------------------------
+# General
+# ----------------------------
+
+# OS-generated
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Logs
+*.log
+
+# Temporary
+*.tmp
+*.bak
+
+# Editor-specific
+*.sublime*
+*.code-workspace
+
+# Git hooks
+.husky/
+
+# Lock files (optional to ignore)
+# package-lock.json
+# poetry.lock
+# Pipfile.lock
