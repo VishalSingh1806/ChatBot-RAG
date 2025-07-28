@@ -6,7 +6,7 @@ import uuid
 from models import QueryRequest, QueryResponse, UserData
 from search import find_best_answer
 from llm_refiner import refine_with_gemini
-from collect_data import collect_user_data, get_user_data_from_session
+from collect_data import collect_user_data, get_user_data_from_session, redis_client
 
 app = FastAPI()
 
@@ -84,11 +84,25 @@ async def handle_query(request: Request, query: QueryRequest):
     """Handle user queries and return responses"""
     try:
         if "session_id" not in request.session:
+            # This is a fallback, but frontend should have established a session.
             request.session["session_id"] = str(uuid.uuid4())
 
         session_id = request.session["session_id"]
+
+        # Fetch user data from session/Redis to get their name
+        user_data = await get_user_data_from_session(session_id)
+        user_name = user_data.get("user_name") if user_data else None
+
+        # Get conversation history from the request
+        history = query.history or []
+
+        # Find the best answer from knowledge base
         result = find_best_answer(query.text)
-        final_answer = refine_with_gemini(query.text, result["answer"])
+
+        # Refine the answer with LLM, providing more context
+        final_answer = refine_with_gemini(
+            user_name=user_name, query=query.text, raw_answer=result["answer"], history=history
+        )
 
         return {
             "answer": final_answer,
@@ -96,6 +110,8 @@ async def handle_query(request: Request, query: QueryRequest):
         }
     except Exception as e:
         print(f"❌ Error in query endpoint: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail="Query processing failed")
 
 @app.post("/collect_user_data")

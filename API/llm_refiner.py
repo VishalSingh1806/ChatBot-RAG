@@ -1,5 +1,6 @@
 from google import genai
 from google.genai import types
+from typing import List, Dict, Optional
 
 phone_number = "9004240004"
 email = "info@recircle.in"
@@ -13,16 +14,41 @@ client = genai.Client(
 
 model = "gemini-2.5-flash-lite-preview-06-17"
 
-def refine_with_gemini(query: str, raw_answer: str) -> str:
-    prompt_text = (
-        f'{query}\n\n'
-        f'Information:\n---\n{raw_answer}\n\n'
-        f'If someone asks how to reach ReCircle, share the official phone number ({phone_number}) or email ({email}) — never invent other contact details.\n'
-        'Only answer questions that are related to plastic waste, Extended Producer Responsibility (EPR), or ReCircle’s work. '
-        'If the question is not related to these, respond politely and suggest asking something relevant.\n\n'
-        'Keep your reply short, clear, and friendly.'
-    )
+bot_name = "ReBot"
+def refine_with_gemini(
+    user_name: Optional[str],
+    query: str,
+    raw_answer: str,
+    history: List[Dict[str, str]],
+    is_first_message: bool = False,
+) -> str:
+    # Build a history string for the prompt
+    history_str = ""
+    for message in history:
+        role = "User" if message.get("role") == "user" else "Assistant"
+        history_str += f'{role}: {message.get("text", "")}\n'
 
+    # Greeting prefix if it's the first message and we have a name
+    greeting_prefix = f"Start your answer with: 'Hi {user_name},'\n" if is_first_message and user_name else ""
+
+    prompt_text = (
+        f'You are {bot_name}, a friendly and helpful assistant for ReCircle.\n'
+        'Your primary goal is to provide clear and concise answers based on the information provided.\n\n'
+        f'{greeting_prefix}'
+        '## CONVERSATION HISTORY (for context):\n'
+        f'{history_str}\n'
+        '## CURRENT USER QUESTION:\n'
+        f'{query}\n\n'
+        '## KNOWLEDGE BASE INFORMATION (use this to answer the question):\n'
+        f'---\n{raw_answer}\n\n'
+        '## INSTRUCTIONS:\n'
+        '1. Based on the KNOWLEDGE BASE INFORMATION, answer the CURRENT USER QUESTION.\n'
+        '2. Use the CONVERSATION HISTORY to understand the context of the question.\n'
+        '3. Keep your reply short, clear, and friendly. Do not repeat the user\'s name unless instructed.\n'
+        f'4. If asked for contact details, provide the official phone number ({phone_number}) or email ({email}). Do not invent contact details.\n'
+       '5. Only answer questions about plastic waste, EPR, or ReCircle. For unrelated questions, politely decline and steer the conversation back to relevant topics.\n'
+       f'6. If the user asks your name or identity (e.g., "What is your name?", "Who are you?"), reply clearly: "I\'m {bot_name}, your assistant from ReCircle."'
+    )
 
     contents = [
         types.Content(

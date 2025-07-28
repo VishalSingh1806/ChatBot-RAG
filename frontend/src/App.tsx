@@ -146,6 +146,12 @@ function App() {
         timestamp: new Date()
       };
 
+      // Prepare history for the API call (all messages *before* the new one)
+      const historyForApi = messages.map(msg => ({
+        role: msg.sender === 'user' ? 'user' : 'bot',
+        text: msg.text,
+      }));
+
       setMessages(prev => [...prev, userMessage]);
       const currentMessage = message.trim();
       setMessage('');
@@ -155,7 +161,8 @@ function App() {
         const data = await apiCall('/query', {
           method: 'POST',
           body: JSON.stringify({
-            text: currentMessage
+            text: currentMessage,
+            history: historyForApi, // Send history
           }),
         });
 
@@ -323,6 +330,13 @@ function App() {
         sender: 'user',
         timestamp: new Date()
       };
+
+      // Prepare history for the API call (all messages *before* the new one)
+      const historyForApi = messages.map(msg => ({
+        role: msg.sender === 'user' ? 'user' : 'bot',
+        text: msg.text,
+      }));
+
       setIsTyping(true);
       setMessages(prev => [...prev, userMessage]);
 
@@ -330,7 +344,8 @@ function App() {
         const data = await apiCall('/query', {
           method: 'POST',
           body: JSON.stringify({
-            text: question
+            text: question,
+            history: historyForApi, // Send history
           }),
         });
 
@@ -399,7 +414,7 @@ function App() {
                   }`}></div>
                 </div>
                 <div>
-                  <h3 className="text-white font-bold text-base">Revo</h3>
+                  <h3 className="text-white font-bold text-base">ReBot</h3>
                   <p className="text-xs text-gray-200">
                     {sessionInitialized ? 'Online' : isConnecting ? 'Connecting...' : 'Offline'}
                   </p>

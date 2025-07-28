@@ -1,10 +1,11 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 
 class QueryRequest(BaseModel):
     session_id: Optional[str] = None
     text: str
+    history: Optional[List[Dict[str, str]]] = []
 
 class UserData(BaseModel):
     session_id: Optional[str] = None
