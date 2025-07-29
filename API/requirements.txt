@@ -1,9 +1,9 @@
 fastapi
-uvicorn
+uvicorn[standard]
 redis
 pydantic
 python-dotenv
-google-genai
+google-generativeai
 pandas
 sentence-transformers
 scikit-learn

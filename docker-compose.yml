@@ -2,25 +2,38 @@ version: '3.8'
 
 services:
   redis:
-    image: redis:7
-    container_name: chatbot-redis
+    image: "redis:alpine"
+    container_name: chatbot_redis
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
 
-  chatbot-api:
+  api:
     build:
       context: ./API
-    container_name: chatbot-api-container
+    container_name: chatbot_api
+    restart: always
+    env_file:
+      - .env
+    environment:
+      # This tells the API to connect to the 'redis' service, not 'localhost'
+      - REDIS_HOST=redis
     ports:
       - "8000:8000"
     depends_on:
       - redis
-    restart: always
 
-  chatbot-frontend:
+  frontend:
     build:
       context: ./frontend
-    container_name: chatbot-frontend-container
-    ports:
-      - "8080:80"
+    container_name: chatbot_frontend
     restart: always
+    ports:
+      # Map the standard web port 80 on the server to the container's port 80
+      - "80:80"
+    depends_on:
+      - api
+
+volumes:
+  redis_data:

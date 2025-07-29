@@ -18,11 +18,9 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 # Redis client
 try:
-    # Use REDIS_HOST from environment for Docker, fallback to localhost for local dev
-    REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
-    redis_client = redis.StrictRedis(host=REDIS_HOST, port=6379, db=0, decode_responses=True)
+    redis_client = redis.StrictRedis(host="localhost", port=6379, db=0, decode_responses=True)
     redis_client.ping()
-    logging.info(f"✅ Redis client initialized and connected to {REDIS_HOST}.")
+    logging.info("✅ Redis client initialized and connected.")
 except Exception as e:
     logging.error(f"❌ Failed to initialize Redis client: {e}")
     redis_client = None
