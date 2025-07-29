@@ -23,7 +23,6 @@ services:
       - "8000:8000"
     depends_on:
       - redis
-
   frontend:
     build:
       context: ./frontend
