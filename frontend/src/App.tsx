@@ -39,7 +39,7 @@ function App() {
 
   // Create a consistent fetch function with proper credentials and error handling
   const apiCall = async (endpoint: string, options: RequestInit = {}) => {
-    const baseUrl = 'http://localhost:8000';
+    const baseUrl = 'http://34.173.78.39:8000';
     const defaultOptions: RequestInit = {
       credentials: 'include', // This is crucial for session cookies
       headers: {
