@@ -1,8 +1,11 @@
 fastapi
-uvicorn[standard]
+uvicorn
+redis
+pydantic
+python-dotenv
+google-genai
 pandas
 sentence-transformers
-google-generativeai
-redis
-python-dotenv
+scikit-learn
+torch
 itsdangerous
