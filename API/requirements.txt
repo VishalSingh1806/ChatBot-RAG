@@ -1,8 +1,8 @@
 fastapi
-uvicorn
+uvicorn[standard]
 pandas
 sentence-transformers
-google-genai
+google-generativeai
 redis
-dotenv
+python-dotenv
 itsdangerous

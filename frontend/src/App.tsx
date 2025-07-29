@@ -39,7 +39,8 @@ function App() {
 
   // Create a consistent fetch function with proper credentials and error handling
   const apiCall = async (endpoint: string, options: RequestInit = {}) => {
-    const baseUrl = 'http://34.173.78.39:8000';
+    // Use a relative path for the API. Nginx will proxy this to the backend.
+    const baseUrl = '/api';
     const defaultOptions: RequestInit = {
       credentials: 'include', // This is crucial for session cookies
       headers: {
@@ -137,67 +138,71 @@ function App() {
     scrollToBottom();
   }, [messages]);
 
-  const handleSendMessage = async () => {
-    if (message.trim() && isFormSubmitted && sessionInitialized) {
-      const userMessage: Message = {
-        id: Date.now().toString(),
-        text: message,
-        sender: 'user',
+  // Refactored function to handle sending any query to the backend
+  const submitQuery = async (queryText: string) => {
+    if (!queryText.trim() || !isFormSubmitted || !sessionInitialized) return;
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      text: queryText,
+      sender: 'user',
+      timestamp: new Date()
+    };
+
+    // Prepare history for the API call (all messages *before* the new one)
+    const historyForApi = messages.map(msg => ({
+      role: msg.sender === 'user' ? 'user' : 'bot',
+      text: msg.text,
+    }));
+
+    setIsTyping(true);
+    setMessages(prev => [...prev, userMessage]);
+
+    try {
+      const data = await apiCall('/query', {
+        method: 'POST',
+        body: JSON.stringify({
+          text: queryText,
+          history: historyForApi, // Send history
+        }),
+      });
+
+      const botMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: data.answer || "Sorry, I couldn't process your request.",
+        sender: 'bot',
         timestamp: new Date()
       };
+      setMessages(prev => [...prev, botMessage]);
 
-      // Prepare history for the API call (all messages *before* the new one)
-      const historyForApi = messages.map(msg => ({
-        role: msg.sender === 'user' ? 'user' : 'bot',
-        text: msg.text,
-      }));
-
-      setMessages(prev => [...prev, userMessage]);
-      const currentMessage = message.trim();
-      setMessage('');
-      setIsTyping(true);
-
-      try {
-        const data = await apiCall('/query', {
-          method: 'POST',
-          body: JSON.stringify({
-            text: currentMessage,
-            history: historyForApi, // Send history
-          }),
-        });
-
-        const botMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          text: data.answer || "Sorry, I couldn't process your request.",
-          sender: 'bot',
-          timestamp: new Date()
-        };
-        setMessages(prev => [...prev, botMessage]);
-
-        // Update suggested questions dynamically from backend response
-        if (data.similar_questions && Array.isArray(data.similar_questions) && data.similar_questions.length > 0) {
-          setSuggestedQuestions(data.similar_questions);
-        } else {
-          setSuggestedQuestions([]);
-        }
-        
-        // Scroll to bottom after updating suggestions
-        setTimeout(() => {
-          scrollToBottom();
-        }, 100);
-      } catch (error) {
-        console.error('❌ Error sending message:', error);
-        const errorMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          text: "Sorry, I'm having trouble connecting. Please try again later.",
-          sender: 'bot',
-          timestamp: new Date()
-        };
-        setMessages(prev => [...prev, errorMessage]);
+      // Update suggested questions dynamically from backend response
+      if (data.similar_questions && Array.isArray(data.similar_questions) && data.similar_questions.length > 0) {
+        setSuggestedQuestions(data.similar_questions);
+      } else {
         setSuggestedQuestions([]);
-      } finally {
-        setIsTyping(false);
       }
+      
+      setTimeout(() => scrollToBottom(), 100);
+    } catch (error) {
+      console.error('❌ Error sending message:', error);
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: "Sorry, I'm having trouble connecting. Please try again later.",
+        sender: 'bot',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      setSuggestedQuestions([]);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    const currentMessage = message.trim();
+    if (currentMessage) {
+      setMessage('');
+      await submitQuery(currentMessage);
     }
   };
 
@@ -323,63 +328,7 @@ function App() {
   };
 
   const handleSuggestionClick = async (question: string) => {
-    if (isFormSubmitted && sessionInitialized) {
-      const userMessage: Message = {
-        id: Date.now().toString(),
-        text: question,
-        sender: 'user',
-        timestamp: new Date()
-      };
-
-      // Prepare history for the API call (all messages *before* the new one)
-      const historyForApi = messages.map(msg => ({
-        role: msg.sender === 'user' ? 'user' : 'bot',
-        text: msg.text,
-      }));
-
-      setIsTyping(true);
-      setMessages(prev => [...prev, userMessage]);
-
-      try {
-        const data = await apiCall('/query', {
-          method: 'POST',
-          body: JSON.stringify({
-            text: question,
-            history: historyForApi, // Send history
-          }),
-        });
-
-        const botMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          text: data.answer || "Sorry, I couldn't process your request.",
-          sender: 'bot',
-          timestamp: new Date()
-        };
-        setMessages(prev => [...prev, botMessage]);
-
-        if (data.similar_questions && Array.isArray(data.similar_questions) && data.similar_questions.length > 0) {
-          setSuggestedQuestions(data.similar_questions);
-        } else {
-          setSuggestedQuestions([]);
-        }
-
-        setTimeout(() => {
-          scrollToBottom();
-        }, 100);
-      } catch (err) {
-        console.error("❌ Error fetching answer:", err);
-        const errorMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          text: "Sorry, something went wrong. Please try again.",
-          sender: 'bot',
-          timestamp: new Date()
-        };
-        setMessages(prev => [...prev, errorMessage]);
-        setSuggestedQuestions([]);
-      } finally {
-        setIsTyping(false);
-      }
-    }
+    await submitQuery(question);
   };
 
   return (

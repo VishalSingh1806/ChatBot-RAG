@@ -1,14 +1,17 @@
 # Use a lightweight official Python image
-FROM python:3.10-slim
+FROM python:3.9-slim
 
 # Set working directory inside container
 WORKDIR /app
 
-# Copy files to container
-COPY . .
+# Copy only the requirements file to leverage Docker cache
+COPY requirements.txt .
 
 # Upgrade pip and install dependencies
-RUN pip install --upgrade pip && pip install -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && pip install -r requirements.txt
+
+# Copy the rest of the application code
+COPY . .
 
 # Expose port (FastAPI default)
 EXPOSE 8000
