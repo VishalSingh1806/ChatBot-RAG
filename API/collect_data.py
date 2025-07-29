@@ -18,12 +18,14 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 # Redis client
 try:
-    redis_client = redis.StrictRedis(host="localhost", port=6379, db=0, decode_responses=True)
+    redis_host = os.getenv("REDIS_HOST", "localhost")  # Fallback only if not defined
+    redis_client = redis.StrictRedis(host=redis_host, port=6379, db=0, decode_responses=True)
     redis_client.ping()
-    logging.info("✅ Redis client initialized and connected.")
+    logging.info(f"✅ Redis client initialized and connected to {redis_host}")
 except Exception as e:
     logging.error(f"❌ Failed to initialize Redis client: {e}")
     redis_client = None
+
 
 # Email batch storage
 email_batch = []
