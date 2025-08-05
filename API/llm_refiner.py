@@ -12,7 +12,7 @@ email = "info@recircle.in"
 # Initialize Gemini client
 client = genai.Client(
     vertexai=True,
-    project=os.getenv("GOOGLE_PROJECT_ID", "grant-ai-writer"),
+    project=os.getenv("GOOGLE_PROJECT_ID", "epr-chatbot-443706"),
     location=os.getenv("GOOGLE_LOCATION", "global"),
 )
 

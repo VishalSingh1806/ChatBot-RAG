@@ -17,23 +17,10 @@ app = FastAPI()
 # ✅ Load secret key for session cookies
 SECRET_KEY = os.getenv("SECRET_KEY", "a_default_secret_key_for_development_only")
 
-# ✅ Load allowed origins from environment variable for adaptability
-# Example: "http://localhost:5173 http://your-vm-ip"
-allowed_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173").split()
-
-# ✅ Apply CORS middleware FIRST — before session
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # Explicitly include OPTIONS
-    allow_headers=["*"],
-)
-
 # Determine if running in production (e.g., on the VM with HTTPS)
 IS_PRODUCTION = os.getenv("APP_ENV") == "production"
 
-# ✅ Session middleware
+# ✅ Session middleware (registered before CORS)
 app.add_middleware(
     SessionMiddleware,
     secret_key=SECRET_KEY,
@@ -44,6 +31,19 @@ app.add_middleware(
     session_cookie="session",
     max_age=86400,          # 24 hours
     path="/",
+)
+
+# ✅ Apply CORS middleware
+allow_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allow_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 @app.get("/")
@@ -138,3 +138,6 @@ async def handle_user_data(request: Request, user_data: UserData):
     except Exception as e:
         logging.error(f"❌ Error in /collect_user_data endpoint: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Data collection failed")
+
+
+# uvicorn main:app --reload

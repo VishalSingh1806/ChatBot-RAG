@@ -39,8 +39,8 @@ function App() {
 
   // Create a consistent fetch function with proper credentials and error handling
   const apiCall = async (endpoint: string, options: RequestInit = {}) => {
-    // Use a relative path for the API. Nginx will proxy this to the backend.
-    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    // Use a relative path for the API. Vite will proxy this to the backend.
+    const baseUrl = '';
     const defaultOptions: RequestInit = {
       credentials: 'include', // This is crucial for session cookies
       headers: {
