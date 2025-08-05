@@ -3,7 +3,7 @@ uvicorn[standard]
 redis
 pydantic
 python-dotenv
-google-generativeai
+google-cloud-aiplatform
 pandas
 sentence-transformers
 scikit-learn

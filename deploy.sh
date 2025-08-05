@@ -28,7 +28,7 @@ cd "$(dirname "$0")/API"
 sudo docker build -t chatbot-api .
 
 echo "🚀 Running chatbot-api..."
-sudo docker run -d -p 8000:8000 --name chatbot-api-container chatbot-api
+sudo docker run -d --env-file .env -p 8000:8000 --name chatbot-api-container chatbot-api
 
 # 2️⃣ FRONTEND SETUP
 echo "📦 Frontend: Building chatbot-frontend..."
