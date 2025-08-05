@@ -42,6 +42,10 @@ allow_origins = [
     "http://34.173.78.39",
     "http://34.173.78.39:8080",
     "http://34.173.78.39:80",
+    "http://rebot.recircle.in",
+    "https://rebot.recircle.in",
+    "http://rebot.recircle.in:80",
+    "https://rebot.recircle.in:443",
 ]
 app.add_middleware(
     CORSMiddleware,

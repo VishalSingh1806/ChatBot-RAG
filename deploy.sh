@@ -28,10 +28,17 @@ if [ -n "$existing_redis" ]; then
     sudo docker rm -f $existing_redis
 fi
 
-echo "🔍 Checking if port 8080 is in use..."
-used_pid=$(sudo lsof -t -i:8080 || true)
+echo "🔍 Checking if port 80 is in use..."
+used_pid=$(sudo lsof -t -i:80 || true)
 if [ -n "$used_pid" ]; then
-    echo "❌ Port 8080 is in use by PID $used_pid. Killing it..."
+    echo "❌ Port 80 is in use by PID $used_pid. Killing it..."
+    sudo kill -9 $used_pid
+fi
+
+echo "🔍 Checking if port 8000 is in use..."
+used_pid=$(sudo lsof -t -i:8000 || true)
+if [ -n "$used_pid" ]; then
+    echo "❌ Port 8000 is in use by PID $used_pid. Killing it..."
     sudo kill -9 $used_pid
 fi
 
@@ -85,12 +92,23 @@ echo "🚀 Launching chatbot-frontend…"
 sudo docker run -d \
   --name chatbot-frontend-container \
   --network chat-net \
-  -p 8080:80 \
+  -p 80:80 \
   chatbot-frontend
 
 # ─── Step 6: Final status & URLs ───────────────────────────────────────────────
 echo "✅ All services are up and running:"
 sudo docker ps --filter name=chatbot
 
-echo "🌐 Frontend: http://localhost:8080"
-echo "🔌 Backend:  http://localhost:8000"
+echo ""
+echo "🌟 ===== DEPLOYMENT COMPLETE ===== 🌟"
+echo "🌐 Frontend: http://rebot.recircle.in"
+echo "🌐 Frontend (IP): http://34.173.78.39"
+echo "🔌 Backend:  http://34.173.78.39:8000"
+echo ""
+echo "📋 Service Status:"
+echo "   - Redis: chatbot-redis (internal)"
+echo "   - API: chatbot-api-container:8000"
+echo "   - Frontend: chatbot-frontend-container:80"
+echo ""
+echo "✨ Your bot is now accessible at: http://rebot.recircle.in"
+echo "⚡ Backend health check: http://34.173.78.39:8000/"
