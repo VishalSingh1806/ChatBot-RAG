@@ -13,157 +13,44 @@ else
 fi
 
 # ─── Step 1: Pre-cleanup ────────────────────────────────────────────────────────
-echo "🧼 Removing all stopped containers..."
+echo "🧼 Cleaning up old containers and ports..."
 sudo docker container prune -f
+for name in chatbot-api-container chatbot-frontend-container chatbot-redis; do
+  id=$(sudo docker ps -aq --filter "name=$name")
+  if [ -n "$id" ]; then sudo docker rm -f $id; fi
+done
 
-echo "🧼 Removing existing chatbot-* containers (if any)..."
-existing_containers=$(sudo docker ps -aq --filter "name=chatbot-")
-if [ -n "$existing_containers" ]; then
-    sudo docker rm -f $existing_containers
+# Kill anything on 80, 443, 8000, 3000
+for port in 80 443 8000 3000; do
+  pid=$(sudo lsof -t -i:$port || true)
+  if [ -n "$pid" ]; then
+    echo "❌ Port $port in use by PID $pid—killing"
+    sudo kill -9 $pid
+  fi
+done
+
+# ─── Step 2: Obtain SSL cert via standalone plugin ─────────────────────────────
+DOMAIN="rebot.recircle.in"
+EMAIL="admin@recircle.in"  # ← your real email
+
+echo "🔒 Installing Certbot & obtaining certificate for $DOMAIN..."
+if ! command -v certbot &>/dev/null; then
+  sudo apt update
+  sudo apt install -y certbot
 fi
 
-echo "🧼 Removing existing Redis container (if any)..."
-existing_redis=$(sudo docker ps -aq --filter "name=chatbot-redis")
-if [ -n "$existing_redis" ]; then
-    sudo docker rm -f $existing_redis
-fi
-
-echo "🔍 Checking if port 80 is in use..."
-used_pid=$(sudo lsof -t -i:80 || true)
-if [ -n "$used_pid" ]; then
-    echo "❌ Port 80 is in use by PID $used_pid. Killing it..."
-    sudo kill -9 $used_pid
-fi
-
-echo "🔍 Checking if port 8000 is in use..."
-used_pid=$(sudo lsof -t -i:8000 || true)
-if [ -n "$used_pid" ]; then
-    echo "❌ Port 8000 is in use by PID $used_pid. Killing it..."
-    sudo kill -9 $used_pid
-fi
-
-echo "🔍 Checking if port 443 is in use..."
-used_pid=$(sudo lsof -t -i:443 || true)
-if [ -n "$used_pid" ]; then
-    echo "❌ Port 443 is in use by PID $used_pid. Killing it..."
-    sudo kill -9 $used_pid
-fi
-
-# ─── Step 2: Install and configure SSL certificate ────────────────────────────
-echo "🔒 Setting up SSL certificate with certbot..."
-
-# Install certbot if not already installed
-if ! command -v certbot &> /dev/null; then
-    echo "📦 Installing certbot..."
-    sudo apt update
-    sudo apt install -y certbot python3-certbot-nginx
-else
-    echo "✅ Certbot already installed"
-fi
-
-# Stop nginx if running to allow certbot to bind to port 80
+# Ensure Nginx is stopped so certbot can bind to :80
 sudo systemctl stop nginx 2>/dev/null || true
 
-# Install nginx if not already installed
-if ! command -v nginx &> /dev/null; then
-    echo "📦 Installing nginx..."
-    sudo apt install -y nginx
-else
-    echo "✅ Nginx already installed"
-fi
+# Obtain or renew certificate
+sudo certbot certonly --standalone \
+  --non-interactive --agree-tos \
+  --email "$EMAIL" \
+  -d "$DOMAIN"
 
-# Create nginx configuration for the domain
-echo "📝 Creating nginx configuration..."
-sudo mkdir -p /etc/nginx/sites-available
-sudo mkdir -p /etc/nginx/sites-enabled
+echo "✅ Certificate installed at /etc/letsencrypt/live/$DOMAIN/"
 
-cat << 'EOF' | sudo tee /etc/nginx/sites-available/chatbot > /dev/null
-server {
-    listen 80;
-    server_name rebot.recircle.in;
-    
-    location /.well-known/acme-challenge/ {
-        root /var/www/html;
-    }
-    
-    location / {
-        return 301 https://$server_name$request_uri;
-    }
-}
-
-server {
-    listen 443 ssl http2;
-    server_name rebot.recircle.in;
-    
-    # SSL configuration will be added by certbot
-    
-    location / {
-        proxy_pass http://localhost:80;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Host $server_name;
-        proxy_redirect off;
-    }
-    
-    location /api {
-        proxy_pass http://localhost:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Host $server_name;
-        proxy_redirect off;
-        
-        # WebSocket support
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
-}
-EOF
-
-# Enable the site
-sudo ln -sf /etc/nginx/sites-available/chatbot /etc/nginx/sites-enabled/
-sudo rm -f /etc/nginx/sites-enabled/default
-
-# Test nginx configuration
-sudo nginx -t
-
-# Start nginx
-sudo systemctl start nginx
-sudo systemctl enable nginx
-
-# Get SSL certificate
-echo "🔒 Obtaining SSL certificate for rebot.recircle.in..."
-sudo certbot --nginx -d rebot.recircle.in --non-interactive --agree-tos --email admin@recircle.in --redirect
-
-# Setup auto-renewal
-echo "⚡ Setting up SSL certificate auto-renewal..."
-sudo systemctl enable certbot.timer
-sudo systemctl start certbot.timer
-
-echo "✅ SSL certificate setup complete!"
-
-# ─── Step 3: Fetch service-account key ─────────────────────────────────────────
-echo "🔐 Ensuring gsutil is available..."
-if ! command -v gsutil &> /dev/null; then
-  echo "❌ gsutil not found. Please install the Google Cloud SDK and retry." >&2
-  exit 1
-fi
-
-echo "🔐 Fetching service-account key from GCS…"
-sudo mkdir -p /etc/epr-chatbot/keys
-sudo chmod 700 /etc/epr-chatbot/keys
-
-sudo gsutil cp gs://epr-bucket/epr-chatbot-443706-ede5db0d0b98.json \
-    /etc/epr-chatbot/keys/sa-key.json
-
-sudo chmod 600 /etc/epr-chatbot/keys/sa-key.json
-echo "🔐 Service account key stored at /etc/epr-chatbot/keys/sa-key.json"
-
-# ─── Step 4: Start Redis ───────────────────────────────────────────────────────
+# ─── Step 3: Launch Redis ───────────────────────────────────────────────────────
 echo "🔴 Starting Redis container..."
 sudo docker run -d \
   --name chatbot-redis \
@@ -171,12 +58,10 @@ sudo docker run -d \
   -p 6379:6379 \
   redis:alpine
 
-# ─── Step 5: Build & run backend ───────────────────────────────────────────────
-echo "📦 Building chatbot-api Docker image..."
+# ─── Step 4: Build & run backend ───────────────────────────────────────────────
+echo "📦 Building & launching chatbot-api..."
 cd "$(dirname "$0")/API"
 sudo docker build -t chatbot-api .
-
-echo "🚀 Launching chatbot-api…"
 sudo docker run -d \
   --name chatbot-api-container \
   --network chat-net \
@@ -187,87 +72,59 @@ sudo docker run -d \
   -p 8000:8000 \
   chatbot-api
 
-# ─── Step 6: Build & run frontend ──────────────────────────────────────────────
-echo "📦 Building chatbot-frontend Docker image..."
+# ─── Step 5: Build & run frontend ──────────────────────────────────────────────
+echo "📦 Building & launching chatbot-frontend..."
 cd ../frontend
 sudo docker build -t chatbot-frontend .
-
-echo "🚀 Launching chatbot-frontend…"
 sudo docker run -d \
   --name chatbot-frontend-container \
   --network chat-net \
   -p 3000:80 \
   chatbot-frontend
 
-# ─── Step 7: Update nginx configuration for Docker containers ─────────────────
-echo "🔄 Updating nginx configuration for container ports..."
-
-cat << 'EOF' | sudo tee /etc/nginx/sites-available/chatbot > /dev/null
+# ─── Step 6: Write host‐level Nginx config ─────────────────────────────────────
+echo "📝 Writing Nginx SSL proxy config for $DOMAIN..."
+sudo bash -c "cat > /etc/nginx/sites-available/chatbot <<'EOF'
+# Redirect HTTP → HTTPS
 server {
-    listen 80;
-    server_name rebot.recircle.in;
-    
-    location /.well-known/acme-challenge/ {
-        root /var/www/html;
-    }
-    
-    location / {
-        return 301 https://$server_name$request_uri;
-    }
+  listen 80;
+  server_name $DOMAIN;
+  return 301 https://\$host\$request_uri;
 }
 
+# HTTPS proxy to frontend container
 server {
-    listen 443 ssl http2;
-    server_name rebot.recircle.in;
-    
-    # SSL configuration managed by certbot
-    
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Host $server_name;
-        proxy_redirect off;
-    }
-    
-    location /api {
-        proxy_pass http://localhost:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Host $server_name;
-        proxy_redirect off;
-        
-        # WebSocket support
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
+  listen 443 ssl http2;
+  server_name $DOMAIN;
+
+  ssl_certificate     /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
+  ssl_protocols       TLSv1.2 TLSv1.3;
+  ssl_ciphers         HIGH:!aNULL:!MD5;
+
+  # Proxy every path to the frontend container
+  location / {
+    proxy_pass http://localhost:3000;
+    proxy_set_header Host              \$host;
+    proxy_set_header X-Real-IP         \$remote_addr;
+    proxy_set_header X-Forwarded-For   \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+  }
 }
-EOF
+EOF"
 
-# Reload nginx configuration
-sudo nginx -t && sudo systemctl reload nginx
+# Enable site
+sudo ln -sf /etc/nginx/sites-available/chatbot /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
 
-# ─── Step 8: Final status & URLs ───────────────────────────────────────────────
-echo "✅ All services are up and running:"
+# Test & reload Nginx
+sudo nginx -t
+sudo systemctl enable nginx
+sudo systemctl start nginx
+
+# ─── Step 7: Final status & URLs ───────────────────────────────────────────────
+echo "✅ Deployment complete!"
+echo "🔒 HTTPS Frontend: https://$DOMAIN"
+echo "🔌 Backend API:   http://<your-server-ip>:8000  (internal to nginx via container)"
+echo ""
 sudo docker ps --filter name=chatbot
-
-echo ""
-echo "🌟 ===== DEPLOYMENT COMPLETE WITH SSL ===== 🌟"
-echo "🔒 HTTPS Frontend: https://rebot.recircle.in"
-echo "🌐 HTTP Frontend (IP): http://34.173.78.39:3000"
-echo "🔌 Backend API: http://34.173.78.39:8000"
-echo ""
-echo "📋 Service Status:"
-echo "   - Redis: chatbot-redis (internal)"
-echo "   - API: chatbot-api-container:8000"
-echo "   - Frontend: chatbot-frontend-container:3000"
-echo "   - Nginx: SSL proxy on ports 80/443"
-echo ""
-echo "✨ Your bot is now accessible via HTTPS at: https://rebot.recircle.in"
-echo "🔒 SSL certificate auto-renewal is configured"
-echo "⚡ Backend health check: http://34.173.78.39:8000/"
