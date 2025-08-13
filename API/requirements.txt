@@ -10,3 +10,4 @@ scikit-learn
 torch
 itsdangerous
 starlette
+google-genai

@@ -1,8 +1,9 @@
 from google import genai
 from google.genai import types
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 import os
 from dotenv import load_dotenv
+from intent_detector import IntentDetector, IntentResult
 
 load_dotenv()
 
@@ -19,13 +20,17 @@ client = genai.Client(
 model = "gemini-2.5-flash-lite-preview-06-17"
 
 bot_name = "ReBot"
+intent_detector = IntentDetector()
 def refine_with_gemini(
     user_name: Optional[str],
     query: str,
     raw_answer: str,
     history: List[Dict[str, str]],
     is_first_message: bool = False,
-) -> str:
+) -> Tuple[str, IntentResult]:
+    # Analyze user intent
+    intent_result = intent_detector.analyze_intent(query, history)
+    
     # Build a history string for the prompt
     history_str = ""
     for message in history:
@@ -80,4 +85,11 @@ def refine_with_gemini(
     ):
         result += chunk.text
 
-    return result.strip()
+    refined_answer = result.strip()
+    
+    # Add connection suggestion if intent indicates high interest
+    if intent_result.should_connect:
+        connection_message = intent_detector.get_connection_message(intent_result.intent, user_name)
+        refined_answer += f"\n\n---\n\n💼 **Connect with Our Team:**\n{connection_message}\n\n📞 Call us: {phone_number}\n📧 Email: {email}"
+    
+    return refined_answer, intent_result

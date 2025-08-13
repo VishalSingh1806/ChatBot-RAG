@@ -174,6 +174,12 @@ function App() {
         timestamp: new Date()
       };
       setMessages(prev => [...prev, botMessage]);
+      
+      // Handle connection suggestions based on intent
+      if (data.intent?.should_connect) {
+        console.log('🔥 High interest detected:', data.intent);
+        // You can add special UI indicators here for high-interest users
+      }
 
       // Update suggested questions dynamically from backend response
       if (data.similar_questions && Array.isArray(data.similar_questions) && data.similar_questions.length > 0) {

@@ -130,9 +130,25 @@ async def send_email_batch(batch: list):
 
         body_parts = [f"A new batch of {len(batch)} user(s) registered at {datetime.utcnow().isoformat()} UTC:\n"]
         for i, user_data in enumerate(batch, 1):
+            # Check if this is a hot lead
+            hot_lead_indicator = ""
+            if redis_client:
+                try:
+                    session_key = f"session:{user_data.get('session_id', '')}"
+                    if redis_client.exists(session_key):
+                        lead_key = f"lead:{user_data.get('session_id', '')}"
+                        if redis_client.exists(lead_key):
+                            lead_data = redis_client.hgetall(lead_key)
+                            if lead_data.get('hot_lead') == 'true':
+                                hot_lead_indicator = " 🔥 HOT LEAD"
+                            elif int(lead_data.get('lead_score', 0)) >= 15:
+                                hot_lead_indicator = " ⭐ HIGH INTEREST"
+                except Exception:
+                    pass
+            
             part = f"""
                     -------------------
-                    User #{i}
+                    User #{i}{hot_lead_indicator}
                     Name: {user_data.get('name', 'N/A')}
                     Email: {user_data.get('email', 'N/A')}
                     Phone: {user_data.get('phone', 'N/A')}

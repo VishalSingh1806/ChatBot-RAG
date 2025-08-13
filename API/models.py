@@ -14,6 +14,12 @@ class UserData(BaseModel):
     phone: str
     organization: str
 
+class IntentInfo(BaseModel):
+    type: str
+    confidence: float
+    should_connect: bool
+
 class QueryResponse(BaseModel):
     answer: str
     similar_questions: Optional[List[str]] = None
+    intent: Optional[IntentInfo] = None

@@ -8,6 +8,7 @@ from models import QueryRequest, QueryResponse, UserData
 from search import find_best_answer
 from llm_refiner import refine_with_gemini
 from collect_data import collect_user_data, get_user_data_from_session, redis_client
+from lead_manager import lead_manager
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -110,7 +111,7 @@ async def handle_query(request: Request, query: QueryRequest):
         result = find_best_answer(query.text)
 
         # Refine the answer with LLM, providing more context
-        final_answer = refine_with_gemini(
+        final_answer, intent_result = refine_with_gemini(
             user_name=user_name,
             query=query.text,
             raw_answer=result["answer"],
@@ -118,9 +119,22 @@ async def handle_query(request: Request, query: QueryRequest):
             is_first_message=(len(history) == 0) # It's the first message if history is empty
         )
 
+        # Track user intent for lead management
+        await lead_manager.track_user_intent(
+            session_id=session_id,
+            intent_result=intent_result,
+            query=query.text,
+            user_data=user_data
+        )
+
         return {
             "answer": final_answer,
-            "similar_questions": result["suggestions"]
+            "similar_questions": result["suggestions"],
+            "intent": {
+                "type": intent_result.intent,
+                "confidence": intent_result.confidence,
+                "should_connect": intent_result.should_connect
+            }
         }
     except Exception as e:
         logging.error(f"❌ Error in /query endpoint: {e}", exc_info=True)
@@ -148,5 +162,51 @@ async def handle_user_data(request: Request, user_data: UserData):
         logging.error(f"❌ Error in /collect_user_data endpoint: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Data collection failed")
 
+
+@app.get("/admin/leads")
+async def get_leads_dashboard():
+    """Admin endpoint to view lead information (add authentication in production)"""
+    try:
+        if not redis_client:
+            raise HTTPException(status_code=503, detail="Redis not available")
+        
+        # Get all lead keys
+        lead_keys = redis_client.keys("lead:*")
+        leads = []
+        
+        for key in lead_keys:
+            session_id = key.split(":")[1]
+            lead_summary = await lead_manager.get_lead_summary(session_id)
+            if lead_summary:
+                leads.append(lead_summary)
+        
+        # Sort by lead score (highest first)
+        leads.sort(key=lambda x: x['lead_score'], reverse=True)
+        
+        return {
+            "total_leads": len(leads),
+            "hot_leads": len([l for l in leads if l['hot_lead']]),
+            "leads": leads[:50]  # Return top 50 leads
+        }
+        
+    except Exception as e:
+        logging.error(f"Error fetching leads dashboard: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch leads")
+
+@app.get("/admin/lead/{session_id}")
+async def get_lead_details(session_id: str):
+    """Get detailed information about a specific lead"""
+    try:
+        lead_summary = await lead_manager.get_lead_summary(session_id)
+        if not lead_summary:
+            raise HTTPException(status_code=404, detail="Lead not found")
+        
+        return lead_summary
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error fetching lead details: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch lead details")
 
 # uvicorn main:app --reload
