@@ -178,9 +178,6 @@ class IntentDetector:
             return True
         
         return False
-
-# Global instance
-intent_detector = IntentDetector()
     
     def get_connection_message(self, intent: str, user_name: Optional[str] = None) -> str:
         """Generate appropriate connection suggestion message"""
@@ -199,3 +196,6 @@ intent_detector = IntentDetector()
         return messages.get(intent, 
             f"Hi {name_prefix}our ReCircle team would be happy to help you with personalized EPR solutions. Would you like to connect with our experts?"
         )
+
+# Global instance
+intent_detector = IntentDetector()
