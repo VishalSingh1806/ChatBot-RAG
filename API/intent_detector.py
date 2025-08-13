@@ -178,6 +178,9 @@ class IntentDetector:
             return True
         
         return False
+
+# Global instance
+intent_detector = IntentDetector()
     
     def get_connection_message(self, intent: str, user_name: Optional[str] = None) -> str:
         """Generate appropriate connection suggestion message"""
