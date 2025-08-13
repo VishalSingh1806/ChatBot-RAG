@@ -119,12 +119,17 @@ async def handle_query(request: Request, query: QueryRequest):
             is_first_message=(len(history) == 0) # It's the first message if history is empty
         )
 
+        # Calculate engagement score from intent detector
+        from intent_detector import intent_detector
+        engagement_score = intent_detector._calculate_engagement_score(query.text.lower(), history)
+
         # Track user intent for lead management
         await lead_manager.track_user_intent(
             session_id=session_id,
             intent_result=intent_result,
             query=query.text,
-            user_data=user_data
+            user_data=user_data,
+            engagement_score=engagement_score
         )
 
         return {

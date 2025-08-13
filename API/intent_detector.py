@@ -1,6 +1,7 @@
 from typing import Dict, List, Optional
 import re
 from dataclasses import dataclass
+import json
 
 @dataclass
 class IntentResult:
@@ -11,6 +12,15 @@ class IntentResult:
 
 class IntentDetector:
     def __init__(self):
+        # Dynamic engagement tracking
+        self.engagement_indicators = {
+            'question_depth': ['how to', 'what is the process', 'can you explain', 'tell me more'],
+            'business_context': ['our company', 'we need', 'my business', 'our organization'],
+            'urgency_signals': ['urgent', 'deadline', 'soon', 'quickly', 'asap'],
+            'service_interest': ['help us', 'assist', 'support', 'guidance', 'consultation'],
+            'compliance_focus': ['compliance', 'certificate', 'registration', 'audit', 'penalty']
+        }
+        
         # Define intent patterns with keywords and phrases
         self.intent_patterns = {
             'high_interest': {
@@ -73,8 +83,11 @@ class IntentDetector:
         }
     
     def analyze_intent(self, query: str, conversation_history: List[Dict]) -> IntentResult:
-        """Analyze user intent from current query and conversation history"""
+        """Analyze user intent with dynamic engagement tracking"""
         query_lower = query.lower()
+        
+        # Calculate engagement score from conversation
+        engagement_score = self._calculate_engagement_score(query_lower, conversation_history)
         
         # Calculate intent scores
         intent_scores = {}
@@ -93,7 +106,7 @@ class IntentDetector:
             # Check phrases
             for phrase in patterns['phrases']:
                 if phrase in query_lower:
-                    score += patterns['weight'] * 1.2  # Phrases get higher weight
+                    score += patterns['weight'] * 1.2
                     indicators.append(f"phrase: {phrase}")
             
             if score > 0:
@@ -108,9 +121,9 @@ class IntentDetector:
             primary_intent = 'general_inquiry'
             confidence = 0.3
         
-        # Check if should suggest team connection
-        should_connect = self._should_suggest_connection(
-            query_lower, conversation_history, primary_intent, confidence
+        # Progressive engagement logic
+        should_connect = self._should_suggest_progressive_connection(
+            query_lower, conversation_history, engagement_score, primary_intent, confidence
         )
         
         return IntentResult(
@@ -120,24 +133,48 @@ class IntentDetector:
             should_connect=should_connect
         )
     
-    def _should_suggest_connection(self, query: str, history: List[Dict], 
-                                 intent: str, confidence: float) -> bool:
-        """Determine if we should suggest connecting with ReCircle team"""
+    def _calculate_engagement_score(self, current_query: str, history: List[Dict]) -> float:
+        """Calculate user engagement score based on conversation patterns"""
+        score = 0
+        user_messages = [msg for msg in history if msg.get('role') == 'user']
         
-        # Lower threshold for testing - suggest connection more frequently
-        if confidence >= 0.3:  # Much lower threshold
-            if intent in ['high_interest', 'urgent_need', 'service_specific', 'business_inquiry']:
+        # Add current query to analysis
+        all_queries = [msg.get('text', '').lower() for msg in user_messages] + [current_query]
+        
+        for query in all_queries:
+            # Check engagement indicators
+            for category, indicators in self.engagement_indicators.items():
+                for indicator in indicators:
+                    if indicator in query:
+                        if category == 'business_context':
+                            score += 2.0
+                        elif category == 'urgency_signals':
+                            score += 1.5
+                        elif category == 'service_interest':
+                            score += 1.8
+                        elif category == 'compliance_focus':
+                            score += 1.6
+                        else:
+                            score += 1.0
+        
+        return min(score, 10.0)  # Cap at 10
+    
+    def _should_suggest_progressive_connection(self, query: str, history: List[Dict], 
+                                             engagement_score: float, intent: str, confidence: float) -> bool:
+        """Progressive connection suggestion based on message count and engagement"""
+        user_message_count = len([msg for msg in history if msg.get('role') == 'user']) + 1
+        
+        # Immediate connection for high-value intents
+        if intent in ['urgent_need'] and confidence > 0.5:
+            return True
+        
+        # Progressive engagement after 4-5 messages
+        if user_message_count >= 4:
+            if engagement_score >= 3.0 or intent in ['high_interest', 'service_specific', 'business_inquiry']:
                 return True
         
-        # Check for any business-related keywords
-        business_keywords = ['company', 'business', 'organization', 'compliance', 'certificate', 
-                           'registration', 'help', 'need', 'want', 'looking', 'require']
-        for keyword in business_keywords:
-            if keyword in query:
-                return True
-        
-        # After 2+ messages, suggest connection
-        if len(history) >= 2:
+        # High engagement users (regardless of message count)
+        if engagement_score >= 5.0:
             return True
         
         return False
