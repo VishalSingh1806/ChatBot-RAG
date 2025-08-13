@@ -3,6 +3,7 @@ from datetime import datetime
 import json
 import logging
 from collect_data import redis_client
+from notification_system import notification_system
 
 class LeadManager:
     def __init__(self):
@@ -99,7 +100,9 @@ class LeadManager:
             redis_client.hset(lead_key, 'hot_lead', 'true')
             redis_client.hset(lead_key, 'hot_lead_timestamp', datetime.utcnow().isoformat())
             
-            # Log hot lead (you can extend this to send emails/notifications)
+            # Send immediate email alert
+            await notification_system.send_hot_lead_alert(lead_data)
+            
             logging.info(f"🔥 HOT LEAD DETECTED: {lead_data.get('user_name', 'Unknown')} - Score: {lead_data['lead_score']}")
             logging.info(f"Criteria met: {[k for k, v in criteria.items() if v]}")
             

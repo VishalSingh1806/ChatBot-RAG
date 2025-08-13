@@ -124,32 +124,20 @@ class IntentDetector:
                                  intent: str, confidence: float) -> bool:
         """Determine if we should suggest connecting with ReCircle team"""
         
-        # High confidence business inquiry
-        if confidence >= self.connection_triggers['high_confidence_threshold']:
-            if intent in ['high_interest', 'urgent_need', 'service_specific']:
+        # Lower threshold for testing - suggest connection more frequently
+        if confidence >= 0.3:  # Much lower threshold
+            if intent in ['high_interest', 'urgent_need', 'service_specific', 'business_inquiry']:
                 return True
         
-        # Check for urgent keywords
-        for urgent_word in self.connection_triggers['urgent_keywords']:
-            if urgent_word in query:
+        # Check for any business-related keywords
+        business_keywords = ['company', 'business', 'organization', 'compliance', 'certificate', 
+                           'registration', 'help', 'need', 'want', 'looking', 'require']
+        for keyword in business_keywords:
+            if keyword in query:
                 return True
         
-        # Check for service requests
-        for service in self.connection_triggers['service_requests']:
-            if service in query:
-                return True
-        
-        # Check conversation history for business patterns
-        business_query_count = 0
-        for msg in history[-5:]:  # Check last 5 messages
-            if msg.get('role') == 'user':
-                msg_text = msg.get('text', '').lower()
-                for pattern in self.intent_patterns['business_inquiry']['keywords']:
-                    if pattern in msg_text:
-                        business_query_count += 1
-                        break
-        
-        if business_query_count >= self.connection_triggers['multiple_business_queries']:
+        # After 2+ messages, suggest connection
+        if len(history) >= 2:
             return True
         
         return False
