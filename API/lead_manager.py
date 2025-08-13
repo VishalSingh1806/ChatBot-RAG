@@ -5,6 +5,7 @@ import logging
 from collect_data import redis_client
 from notification_system import notification_system
 from backend_notifications import backend_notifications
+from lead_qualification import lead_qualification
 
 class LeadManager:
     def __init__(self):
@@ -132,6 +133,21 @@ class LeadManager:
             lead_key = f"lead:{lead_data['session_id']}"
             redis_client.hset(lead_key, 'backend_notified', 'true')
             
+            # Calculate lead quality score
+            user_data = {
+                'email': lead_data.get('email', ''),
+                'phone': lead_data.get('phone', ''),
+                'organization': lead_data.get('organization', '')
+            }
+            
+            # Extract context from recent queries
+            from context_manager import context_manager
+            recent_queries = json.loads(lead_data.get('queries', '[]'))
+            mock_history = [{'role': 'user', 'text': q} for q in recent_queries[:-1]]
+            user_context = context_manager.extract_context(recent_queries[-1] if recent_queries else '', mock_history)
+            
+            lead_quality_score = lead_qualification.calculate_lead_quality_score(user_context, user_data)
+            
             # Prepare session data for notification
             session_data = {
                 'session_id': lead_data['session_id'],
@@ -140,9 +156,12 @@ class LeadManager:
                 'phone': lead_data.get('phone', ''),
                 'organization': lead_data.get('organization', ''),
                 'engagement_score': lead_data.get('engagement_score', 0),
+                'lead_quality_score': lead_quality_score,
                 'message_count': lead_data['total_queries'],
                 'primary_intent': self._get_primary_intent(lead_data),
-                'recent_queries': json.loads(lead_data.get('queries', '[]')),
+                'industry': user_context.get('industry', 'Unknown'),
+                'urgency': user_context.get('urgency', 'low'),
+                'recent_queries': recent_queries,
                 'last_interaction': lead_data.get('last_interaction'),
                 'session_duration': self._calculate_session_duration(lead_data)
             }

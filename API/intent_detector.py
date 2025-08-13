@@ -12,13 +12,14 @@ class IntentResult:
 
 class IntentDetector:
     def __init__(self):
-        # Dynamic engagement tracking
+        # Enhanced engagement tracking
         self.engagement_indicators = {
-            'question_depth': ['how to', 'what is the process', 'can you explain', 'tell me more'],
-            'business_context': ['our company', 'we need', 'my business', 'our organization'],
-            'urgency_signals': ['urgent', 'deadline', 'soon', 'quickly', 'asap'],
-            'service_interest': ['help us', 'assist', 'support', 'guidance', 'consultation'],
-            'compliance_focus': ['compliance', 'certificate', 'registration', 'audit', 'penalty']
+            'question_depth': ['how to', 'what is the process', 'can you explain', 'tell me more', 'step by step', 'detailed'],
+            'business_context': ['our company', 'we need', 'my business', 'our organization', 'we are', 'we have', 'our team', 'my company'],
+            'urgency_signals': ['urgent', 'deadline', 'soon', 'quickly', 'asap', 'immediate', 'today', 'this week'],
+            'service_interest': ['help us', 'assist', 'support', 'guidance', 'consultation', 'quote', 'pricing', 'cost'],
+            'compliance_focus': ['compliance', 'certificate', 'registration', 'audit', 'penalty', 'fine', 'legal'],
+            'decision_signals': ['budget', 'approve', 'decision', 'purchase', 'implement', 'start', 'begin']
         }
         
         # Define intent patterns with keywords and phrases
@@ -154,6 +155,8 @@ class IntentDetector:
                             score += 1.8
                         elif category == 'compliance_focus':
                             score += 1.6
+                        elif category == 'decision_signals':
+                            score += 2.5  # High value for decision-making keywords
                         else:
                             score += 1.0
         
@@ -168,12 +171,15 @@ class IntentDetector:
         if intent in ['urgent_need'] and confidence > 0.5:
             return True
         
-        # Progressive engagement after 4-5 messages
-        if user_message_count >= 4:
-            if engagement_score >= 3.0 or intent in ['high_interest', 'service_specific', 'business_inquiry']:
-                return True
+        # Dynamic timing based on engagement quality
+        if user_message_count >= 3 and engagement_score >= 4.0:
+            return True
+        elif user_message_count >= 4 and engagement_score >= 2.5:
+            return True
+        elif user_message_count >= 2 and engagement_score >= 6.0:  # Very high engagement
+            return True
         
-        # High engagement users (regardless of message count)
+        # Decision-ready users (immediate connection)
         if engagement_score >= 5.0:
             return True
         
@@ -184,17 +190,17 @@ class IntentDetector:
         name_prefix = f"{user_name}, " if user_name else ""
         
         messages = {
-            'high_interest': f"Hi {name_prefix}it sounds like you're looking for comprehensive EPR solutions! Our team at ReCircle specializes in helping businesses achieve full compliance. Would you like to connect with our experts for personalized guidance?",
+            'high_interest': f"It sounds like you're looking for comprehensive EPR solutions! Our ReCircle team specializes in helping businesses achieve full compliance. Would you like to connect with our experts for personalized guidance?",
             
-            'urgent_need': f"{name_prefix}I understand this is urgent! Our ReCircle team has helped many companies handle time-sensitive compliance requirements. Let me connect you with our specialists who can provide immediate assistance.",
+            'urgent_need': f"I understand this is urgent! Our ReCircle team has helped many companies handle time-sensitive compliance requirements. Let me connect you with our specialists who can provide immediate assistance.",
             
-            'service_specific': f"Hi {name_prefix}for specific services like EPR certificates and compliance management, our ReCircle team can provide end-to-end solutions. Would you like to speak with our experts about your requirements?",
+            'service_specific': f"For specific services like EPR certificates and compliance management, our ReCircle team can provide end-to-end solutions. Would you like to speak with our experts about your requirements?",
             
-            'business_inquiry': f"{name_prefix}since you're exploring EPR solutions for your business, our ReCircle team can provide tailored compliance strategies. Would you like to schedule a consultation with our specialists?"
+            'business_inquiry': f"Since you're exploring EPR solutions for your business, our ReCircle team can provide tailored compliance strategies. Would you like to schedule a consultation with our specialists?"
         }
         
         return messages.get(intent, 
-            f"Hi {name_prefix}our ReCircle team would be happy to help you with personalized EPR solutions. Would you like to connect with our experts?"
+            f"Our ReCircle team would be happy to help you with personalized EPR solutions. Would you like to connect with our experts?"
         )
 
 # Global instance

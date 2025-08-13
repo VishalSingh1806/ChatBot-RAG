@@ -111,12 +111,13 @@ async def handle_query(request: Request, query: QueryRequest):
         result = find_best_answer(query.text)
 
         # Refine the answer with LLM, providing more context
-        final_answer, intent_result = refine_with_gemini(
+        final_answer, intent_result, user_context = refine_with_gemini(
             user_name=user_name,
             query=query.text,
             raw_answer=result["answer"],
             history=history,
-            is_first_message=(len(history) == 0) # It's the first message if history is empty
+            is_first_message=(len(history) == 0),
+            session_id=session_id
         )
 
         # Calculate engagement score from intent detector
@@ -139,6 +140,11 @@ async def handle_query(request: Request, query: QueryRequest):
                 "type": intent_result.intent,
                 "confidence": intent_result.confidence,
                 "should_connect": intent_result.should_connect
+            },
+            "context": {
+                "industry": user_context.get('industry'),
+                "urgency": user_context.get('urgency'),
+                "engagement_score": engagement_score
             }
         }
     except Exception as e:
