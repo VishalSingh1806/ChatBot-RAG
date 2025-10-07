@@ -95,7 +95,7 @@ def refine_with_gemini(
             types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="OFF"),
             types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="OFF"),
         ],
-        thinking_config=types.ThinkingConfig(thinking_budget=0),
+        
     )
 
     result = ""

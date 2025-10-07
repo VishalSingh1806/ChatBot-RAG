@@ -16,6 +16,7 @@ env/
 # Environment variables
 .env
 .env.*
+API/.env
 
 # VSCode or PyCharm IDE configs
 .vscode/
@@ -35,6 +36,25 @@ dump.rdb
 
 # Uvicorn reload artifacts
 *.reload
+
+# ----------------------------
+# Database & Heavy Files
+# ----------------------------
+
+# ChromaDB database files
+API/chroma_db/
+chroma_db/
+
+# Large PDF files
+fwdplasticwastemanagementrules/
+*.pdf
+
+# Personal/Test files
+test_*.py
+DBMS_Full_Notes*.pdf
+tree.txt
+.claude/
+pip
 
 # ----------------------------
 # Node frontend (React/Vite)
@@ -86,6 +106,6 @@ ehthumbs.db
 .husky/
 
 # Lock files (optional to ignore)
-# package-lock.json
+package-lock.json
 # poetry.lock
 # Pipfile.lock

@@ -19,7 +19,9 @@ class IntentDetector:
             'urgency_signals': ['urgent', 'deadline', 'soon', 'quickly', 'asap', 'immediate', 'today', 'this week'],
             'service_interest': ['help us', 'assist', 'support', 'guidance', 'consultation', 'quote', 'pricing', 'cost'],
             'compliance_focus': ['compliance', 'certificate', 'registration', 'audit', 'penalty', 'fine', 'legal'],
-            'decision_signals': ['budget', 'approve', 'decision', 'purchase', 'implement', 'start', 'begin']
+            'decision_signals': ['budget', 'approve', 'decision', 'purchase', 'implement', 'start', 'begin'],
+            'technical_questions': ['implementation', 'process', 'requirements', 'documentation', 'procedure'],
+            'risk_indicators': ['penalty', 'fine', 'audit', 'non-compliant', 'violation', 'notice']
         }
         
         # Define intent patterns with keywords and phrases
@@ -84,7 +86,7 @@ class IntentDetector:
         }
     
     def analyze_intent(self, query: str, conversation_history: List[Dict]) -> IntentResult:
-        """Analyze user intent with dynamic engagement tracking"""
+        """Analyze user intent with enhanced engagement tracking"""
         query_lower = query.lower()
         
         # Calculate engagement score from conversation
@@ -122,8 +124,8 @@ class IntentDetector:
             primary_intent = 'general_inquiry'
             confidence = 0.3
         
-        # Progressive engagement logic
-        should_connect = self._should_suggest_progressive_connection(
+        # Enhanced connection logic
+        should_connect = self._should_suggest_connection(
             query_lower, conversation_history, engagement_score, primary_intent, confidence
         )
         
@@ -135,12 +137,15 @@ class IntentDetector:
         )
     
     def _calculate_engagement_score(self, current_query: str, history: List[Dict]) -> float:
-        """Calculate user engagement score based on conversation patterns"""
+        """Calculate user engagement score with behavioral tracking"""
         score = 0
         user_messages = [msg for msg in history if msg.get('role') == 'user']
         
         # Add current query to analysis
         all_queries = [msg.get('text', '').lower() for msg in user_messages] + [current_query]
+        
+        # Track engagement behaviors
+        engagement_behaviors = []
         
         for query in all_queries:
             # Check engagement indicators
@@ -156,30 +161,49 @@ class IntentDetector:
                         elif category == 'compliance_focus':
                             score += 1.6
                         elif category == 'decision_signals':
-                            score += 2.5  # High value for decision-making keywords
+                            score += 2.5
+                        elif category == 'technical_questions':
+                            score += 2.0
+                            engagement_behaviors.append('technical_questions')
+                        elif category == 'risk_indicators':
+                            score += 3.0
                         else:
                             score += 1.0
         
+        # Behavioral bonuses
+        if len(user_messages) >= 5:
+            engagement_behaviors.append('long_conversation')
+        
         return min(score, 10.0)  # Cap at 10
     
-    def _should_suggest_progressive_connection(self, query: str, history: List[Dict], 
-                                             engagement_score: float, intent: str, confidence: float) -> bool:
-        """Progressive connection suggestion based on message count and engagement"""
+    def _should_suggest_connection(self, query: str, history: List[Dict], 
+                                 engagement_score: float, intent: str, confidence: float) -> bool:
+        """Enhanced connection suggestion logic"""
         user_message_count = len([msg for msg in history if msg.get('role') == 'user']) + 1
+        
+        # Immediate connection for high-risk situations
+        risk_keywords = ['penalty', 'fine', 'audit', 'legal action', 'court']
+        if any(keyword in query for keyword in risk_keywords):
+            return True
         
         # Immediate connection for high-value intents
         if intent in ['urgent_need'] and confidence > 0.5:
             return True
         
-        # Dynamic timing based on engagement quality
+        # Service-specific requests
+        service_keywords = ['certificate', 'registration', 'consultation', 'quote', 'pricing']
+        if any(keyword in query for keyword in service_keywords):
+            return True
+        
+        # Progressive engagement-based connection
         if user_message_count >= 3 and engagement_score >= 4.0:
             return True
         elif user_message_count >= 4 and engagement_score >= 2.5:
             return True
-        elif user_message_count >= 2 and engagement_score >= 6.0:  # Very high engagement
+        elif user_message_count >= 2 and engagement_score >= 6.0:
             return True
         
-        # Decision-ready users (immediate connection)
+        # High engagement users
         if engagement_score >= 5.0:
             return True
         

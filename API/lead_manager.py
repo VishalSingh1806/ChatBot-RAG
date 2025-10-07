@@ -1,5 +1,5 @@
 from typing import Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import logging
 from collect_data import redis_client
@@ -16,6 +16,14 @@ class LeadManager:
             'business_inquiry': 6,
             'general_inquiry': 3
         }
+        
+        # Lead priority thresholds
+        self.priority_thresholds = {
+            'critical': 25,  # Immediate attention
+            'high': 15,      # Within 2 hours
+            'medium': 8,     # Within 24 hours
+            'low': 3         # Standard follow-up
+        }
     
     async def track_user_intent(self, session_id: str, intent_result, query: str, user_data: Optional[Dict] = None, engagement_score: float = 0):
         """Track user intent and build lead scoring"""
@@ -24,11 +32,8 @@ class LeadManager:
         
         try:
             lead_key = f"lead:{session_id}"
-            
-            # Get existing lead data
             existing_data = redis_client.hgetall(lead_key)
             
-            # Initialize or update lead data
             lead_data = {
                 'session_id': session_id,
                 'first_interaction': existing_data.get('first_interaction', datetime.utcnow().isoformat()),
@@ -40,10 +45,10 @@ class LeadManager:
                 'queries': existing_data.get('queries', '[]'),
                 'high_interest_queries': int(existing_data.get('high_interest_queries', 0)),
                 'connection_suggested': existing_data.get('connection_suggested', 'false'),
-                'backend_notified': existing_data.get('backend_notified', 'false')
+                'backend_notified': existing_data.get('backend_notified', 'false'),
+                'priority': existing_data.get('priority', 'low')
             }
             
-            # Update with user data if available
             if user_data:
                 lead_data.update({
                     'user_name': user_data.get('user_name', ''),
@@ -66,35 +71,64 @@ class LeadManager:
             })
             lead_data['intents'] = json.dumps(intents_list[-10:])
             
-            # Update lead score
+            # Update lead score - fixed calculation
             intent_score = self.lead_scores.get(intent_result.intent, 0)
             confidence_multiplier = intent_result.confidence
-            lead_data['lead_score'] += int(intent_score * confidence_multiplier)
+            calculated_score = intent_score * confidence_multiplier
+            logging.info(f"🎯 Intent: {intent_result.intent}, Score: {intent_score}, Confidence: {confidence_multiplier}, Calculated: {calculated_score}")
+            lead_data['lead_score'] = max(1, int(calculated_score))  # Minimum score of 1
             
             # Track high interest queries
             if intent_result.intent in ['high_interest', 'urgent_need', 'service_specific']:
                 lead_data['high_interest_queries'] += 1
             
-            # Mark if connection was suggested
             if intent_result.should_connect:
                 lead_data['connection_suggested'] = 'true'
             
+            # Update priority based on score
+            lead_data['priority'] = self._calculate_priority(lead_data['lead_score'], engagement_score)
+            
             # Save to Redis
             redis_client.hmset(lead_key, mapping=lead_data)
-            redis_client.expire(lead_key, 86400 * 30)  # Expire after 30 days
+            redis_client.expire(lead_key, 86400 * 30)
             
-            # Check for notifications
             await self._check_notifications(lead_data)
             
         except Exception as e:
             logging.error(f"Error tracking user intent: {e}")
     
+    def _calculate_priority(self, lead_score: int, engagement_score: float) -> str:
+        """Calculate lead priority based on score and engagement"""
+        combined_score = lead_score + (engagement_score * 2)
+        
+        # Debug logging
+        logging.info(f"🔍 Priority Calculation: Lead Score={lead_score}, Engagement={engagement_score}, Combined={combined_score}")
+        
+        if combined_score >= self.priority_thresholds['critical']:
+            logging.info(f"📊 Priority: CRITICAL (≥{self.priority_thresholds['critical']})")
+            return 'critical'
+        elif combined_score >= self.priority_thresholds['high']:
+            logging.info(f"📊 Priority: HIGH (≥{self.priority_thresholds['high']})")
+            return 'high'
+        elif combined_score >= self.priority_thresholds['medium']:
+            logging.info(f"📊 Priority: MEDIUM (≥{self.priority_thresholds['medium']})")
+            return 'medium'
+        
+        logging.info(f"📊 Priority: LOW (<{self.priority_thresholds['medium']})")
+        return 'low'
+    
     async def _check_notifications(self, lead_data: Dict):
         """Check if notifications should be sent"""
         message_count = lead_data['total_queries']
         engagement_score = lead_data.get('engagement_score', 0)
+        priority = lead_data.get('priority', 'low')
         
-        # Hot lead criteria (immediate sales notification)
+        # Critical priority leads get immediate notification
+        if priority == 'critical' and lead_data.get('backend_notified') != 'true':
+            await self._notify_critical_lead(lead_data)
+            return  # Exit early for critical leads
+        
+        # Hot lead criteria - fixed to prevent false triggers
         hot_lead_criteria = {
             'high_score': lead_data['lead_score'] >= 20,
             'high_engagement': engagement_score >= 5.0,
@@ -102,26 +136,35 @@ class LeadManager:
             'has_contact_info': bool(lead_data.get('email') and lead_data.get('phone'))
         }
         
-        if any(hot_lead_criteria.values()):
+        # Only trigger hot lead if multiple criteria are met AND not low priority
+        criteria_met = sum(hot_lead_criteria.values())
+        if priority != 'low' and ((criteria_met >= 2) or (engagement_score >= 6.0)):
             await self._notify_hot_lead(lead_data, hot_lead_criteria)
-        
-        # Backend team notification (for engagement tracking)
         elif (engagement_score >= 3.0 or message_count >= 4) and lead_data.get('backend_notified') != 'true':
             await self._notify_backend_team(lead_data)
+    
+    async def _notify_critical_lead(self, lead_data: Dict):
+        """Send immediate notification for critical priority leads"""
+        try:
+            lead_key = f"lead:{lead_data['session_id']}"
+            redis_client.hset(lead_key, 'critical_lead', 'true')
+            redis_client.hset(lead_key, 'critical_timestamp', datetime.utcnow().isoformat())
+            
+            await notification_system.send_hot_lead_alert(lead_data)
+            logging.info(f"🚨 CRITICAL LEAD: {lead_data.get('user_name', 'Unknown')} - Score: {lead_data['lead_score']}")
+            
+        except Exception as e:
+            logging.error(f"Error notifying critical lead: {e}")
     
     async def _notify_hot_lead(self, lead_data: Dict, criteria: Dict):
         """Send notification for hot leads"""
         try:
-            # Mark as hot lead
             lead_key = f"lead:{lead_data['session_id']}"
             redis_client.hset(lead_key, 'hot_lead', 'true')
             redis_client.hset(lead_key, 'hot_lead_timestamp', datetime.utcnow().isoformat())
             
-            # Send immediate email alert
             await notification_system.send_hot_lead_alert(lead_data)
-            
-            logging.info(f"🔥 HOT LEAD DETECTED: {lead_data.get('user_name', 'Unknown')} - Score: {lead_data['lead_score']}")
-            logging.info(f"Criteria met: {[k for k, v in criteria.items() if v]}")
+            logging.info(f"🔥 HOT LEAD: {lead_data.get('user_name', 'Unknown')} - Score: {lead_data['lead_score']}")
             
         except Exception as e:
             logging.error(f"Error notifying hot lead: {e}")
@@ -129,18 +172,15 @@ class LeadManager:
     async def _notify_backend_team(self, lead_data: Dict):
         """Notify backend team about high engagement users"""
         try:
-            # Mark as backend notified
             lead_key = f"lead:{lead_data['session_id']}"
             redis_client.hset(lead_key, 'backend_notified', 'true')
             
-            # Calculate lead quality score
             user_data = {
                 'email': lead_data.get('email', ''),
                 'phone': lead_data.get('phone', ''),
                 'organization': lead_data.get('organization', '')
             }
             
-            # Extract context from recent queries
             from context_manager import context_manager
             recent_queries = json.loads(lead_data.get('queries', '[]'))
             mock_history = [{'role': 'user', 'text': q} for q in recent_queries[:-1]]
@@ -148,7 +188,6 @@ class LeadManager:
             
             lead_quality_score = lead_qualification.calculate_lead_quality_score(user_context, user_data)
             
-            # Prepare session data for notification
             session_data = {
                 'session_id': lead_data['session_id'],
                 'user_name': lead_data.get('user_name', 'Anonymous'),
@@ -159,6 +198,7 @@ class LeadManager:
                 'lead_quality_score': lead_quality_score,
                 'message_count': lead_data['total_queries'],
                 'primary_intent': self._get_primary_intent(lead_data),
+                'priority': lead_data.get('priority', 'low'),
                 'industry': user_context.get('industry', 'Unknown'),
                 'urgency': user_context.get('urgency', 'low'),
                 'recent_queries': recent_queries,
@@ -166,10 +206,8 @@ class LeadManager:
                 'session_duration': self._calculate_session_duration(lead_data)
             }
             
-            # Send backend notification
             await backend_notifications.notify_high_engagement_user(session_data)
-            
-            logging.info(f"📧 Backend team notified about session {lead_data['session_id']}")
+            logging.info(f"📧 Backend notified: {lead_data['session_id']} (Priority: {lead_data.get('priority', 'low')})")
             
         except Exception as e:
             logging.error(f"Error notifying backend team: {e}")
@@ -196,7 +234,7 @@ class LeadManager:
             first = datetime.fromisoformat(lead_data.get('first_interaction', ''))
             last = datetime.fromisoformat(lead_data.get('last_interaction', ''))
             duration = last - first
-            return str(duration).split('.')[0]  # Remove microseconds
+            return str(duration).split('.')[0]
         except:
             return 'Unknown'
     
@@ -212,7 +250,6 @@ class LeadManager:
             if not lead_data:
                 return None
             
-            # Parse intents
             intents = json.loads(lead_data.get('intents', '[]'))
             
             return {
@@ -222,10 +259,12 @@ class LeadManager:
                 'email': lead_data.get('email', ''),
                 'phone': lead_data.get('phone', ''),
                 'lead_score': int(lead_data.get('lead_score', 0)),
+                'priority': lead_data.get('priority', 'low'),
                 'total_queries': int(lead_data.get('total_queries', 0)),
                 'high_interest_queries': int(lead_data.get('high_interest_queries', 0)),
                 'connection_suggested': lead_data.get('connection_suggested') == 'true',
                 'hot_lead': lead_data.get('hot_lead') == 'true',
+                'critical_lead': lead_data.get('critical_lead') == 'true',
                 'first_interaction': lead_data.get('first_interaction'),
                 'last_interaction': lead_data.get('last_interaction'),
                 'recent_intents': intents[-5:] if intents else []

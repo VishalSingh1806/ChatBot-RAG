@@ -10,6 +10,9 @@ COPY . .
 # Upgrade pip and install dependencies
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
+# Initialize ChromaDB
+RUN python init_db.py
+
 # Expose port (FastAPI default)
 EXPOSE 8000
 

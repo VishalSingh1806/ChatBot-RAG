@@ -11,3 +11,7 @@ torch
 itsdangerous
 starlette
 google-genai
+chromadb
+pypdf2
+langchain
+langchain-text-splitters

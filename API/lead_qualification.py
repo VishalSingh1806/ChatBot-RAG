@@ -18,7 +18,10 @@ class LeadQualification:
             'timeline': {'immediate': 10, 'this_month': 8, 'next_quarter': 6, 'planning': 3},
             'budget': {'approved': 10, 'in_process': 7, 'planning': 4, 'unknown': 2},
             'decision_maker': {'yes': 10, 'influencer': 6, 'no': 2},
-            'current_status': {'non_compliant': 10, 'partial': 8, 'compliant': 5}
+            'current_status': {'non_compliant': 10, 'partial': 8, 'compliant': 5},
+            'company_size': {'enterprise': 20, 'large': 15, 'medium': 10, 'small': 5, 'startup': 3},
+            'compliance_risk': {'penalty_received': 25, 'audit_scheduled': 20, 'non_compliant': 15, 'partial': 10, 'compliant': 5},
+            'engagement': {'multiple_sessions': 15, 'long_conversation': 12, 'technical_questions': 18, 'shared_contact': 20}
         }
     
     def get_next_qualification_question(self, user_context: Dict, conversation_history: List[Dict]) -> Optional[str]:
@@ -81,6 +84,26 @@ class LeadQualification:
         timeline = timeline_map.get(urgency, 'planning')
         score += self.qualification_scores['timeline'].get(timeline, 3)
         
+        # Budget scoring
+        score += self.qualification_scores['budget'].get(context.get('budget', 'unknown'), 2)
+        
+        # Decision maker scoring
+        score += self.qualification_scores['decision_maker'].get(context.get('decision_maker', 'no'), 2)
+        
+        # Current status scoring
+        score += self.qualification_scores['current_status'].get(context.get('current_status', 'compliant'), 5)
+        
+        # Company size scoring
+        score += self.qualification_scores['company_size'].get(context.get('company_size', 'small'), 5)
+        
+        # Compliance risk scoring
+        score += self.qualification_scores['compliance_risk'].get(context.get('compliance_risk', 'compliant'), 5)
+        
+        # Behavioral scoring
+        engagement_behaviors = context.get('engagement_behaviors', [])
+        for behavior in engagement_behaviors:
+            score += self.qualification_scores['engagement'].get(behavior, 0)
+        
         # Contact info bonus
         if user_data.get('email') and user_data.get('phone'):
             score += 5
@@ -89,7 +112,14 @@ class LeadQualification:
         if user_data.get('organization'):
             score += 3
         
-        return min(score, 50)  # Cap at 50
+        # Apply urgency multiplier
+        urgency = context.get('urgency', 'low')
+        if urgency == 'critical':
+            score = int(score * 2.0)
+        elif urgency == 'high':
+            score = int(score * 1.5)
+        
+        return min(score, 150)  # Cap at 150
     
     def _categorize_volume(self, volume_text: Optional[str]) -> str:
         """Categorize plastic volume"""

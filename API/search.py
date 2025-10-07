@@ -1,31 +1,42 @@
-import pandas as pd
-from sentence_transformers import SentenceTransformer, util
+import chromadb
+from sentence_transformers import SentenceTransformer
+import os
 
+# Initialize ChromaDB client
+client = chromadb.PersistentClient(path="./chroma_db")
 model = SentenceTransformer("all-MiniLM-L6-v2")
 
-# Load and clean CSV
-df = pd.read_csv("data/knowledge.csv")
-
-# Drop rows with missing questions or answers
-df = df.dropna(subset=["question", "answer"])
-
-# Ensure all questions are strings
-df["question"] = df["question"].astype(str)
-
-# Compute embeddings
-df["embedding"] = df["question"].apply(lambda x: model.encode(x, convert_to_tensor=True))
+def get_collection():
+    try:
+        return client.get_collection(name="pdf_docs")  # Changed from "epr_knowledge"
+    except:
+        print("PDF collection not found. Run pdf_processor.py first.")
+        return None
 
 def find_best_answer(user_query: str) -> dict:
-    query_vec = model.encode(user_query, convert_to_tensor=True)
-    scores = [util.cos_sim(query_vec, row)[0][0].item() for row in df["embedding"]]
-
-    # Get top 4 most relevant indices (1 main answer + 3 suggestions)
-    top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:4]
-    top_matches = df.iloc[top_indices]
-
-    answer = top_matches.iloc[0]["answer"]
-    similar_questions = list(top_matches.iloc[1:]["question"])
-
+    collection = get_collection()
+    if not collection:
+        return {
+            "answer": "Database not ready. Please process PDF first.",
+            "suggestions": []
+        }
+    
+    # Query ChromaDB
+    results = collection.query(
+        query_texts=[user_query],
+        n_results=4
+    )
+    
+    if not results['documents'][0]:
+        return {
+            "answer": "I don't have information about that topic.",
+            "suggestions": []
+        }
+    
+    # Get main answer and suggestions
+    answer = results['documents'][0][0]  # First chunk as answer
+    similar_questions = results['documents'][0][1:4]  # Next 3 as suggestions
+    
     return {
         "answer": answer,
         "suggestions": similar_questions

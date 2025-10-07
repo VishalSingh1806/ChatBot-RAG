@@ -74,7 +74,7 @@ async def get_or_create_session(request: Request):
             logging.info(f"✅ Created new session: {session_id}")
         else:
             session_id = request.session["session_id"]
-            logging.info(f"✅ Using existing session: {session_id}")
+            logging.info(f"✅ Found existing user data for session {session_id}")
 
         user_data = await get_user_data_from_session(session_id)
 
@@ -99,6 +99,7 @@ async def handle_query(request: Request, query: QueryRequest):
             request.session["session_id"] = str(uuid.uuid4())
 
         session_id = request.session["session_id"]
+        logging.info(f"🔄 Processing query for session {session_id}: {query.text[:50]}...")
 
         # Fetch user data from session/Redis to get their name
         user_data = await get_user_data_from_session(session_id)
@@ -124,6 +125,9 @@ async def handle_query(request: Request, query: QueryRequest):
         from intent_detector import intent_detector
         engagement_score = intent_detector._calculate_engagement_score(query.text.lower(), history)
 
+        # Debug: Log before calling lead manager
+        logging.info(f"🔄 About to track intent for session {session_id}: {intent_result.intent}")
+
         # Track user intent for lead management
         await lead_manager.track_user_intent(
             session_id=session_id,
@@ -132,6 +136,8 @@ async def handle_query(request: Request, query: QueryRequest):
             user_data=user_data,
             engagement_score=engagement_score
         )
+
+        logging.info(f"✅ Lead tracking completed for session {session_id}")
 
         return {
             "answer": final_answer,
