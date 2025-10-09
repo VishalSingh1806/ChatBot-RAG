@@ -20,7 +20,7 @@ client = genai.Client(
     location=os.getenv("GOOGLE_LOCATION", "global"),
 )
 
-model = "gemini-2.5-flash-lite-preview-06-17"
+model = "gemini-2.0-flash-exp"
 
 bot_name = "ReBot"
 intent_detector = IntentDetector()

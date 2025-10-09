@@ -13,5 +13,6 @@ starlette
 google-genai
 chromadb
 pypdf2
+pdfplumber
 langchain
 langchain-text-splitters
