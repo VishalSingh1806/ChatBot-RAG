@@ -18,6 +18,10 @@ env/
 .env.*
 API/.env
 
+# Google Cloud credentials
+*.json
+epr-chatbot-*.json
+
 # VSCode or PyCharm IDE configs
 .vscode/
 .idea/
