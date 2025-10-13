@@ -190,9 +190,18 @@ class IntentDetector:
         if intent in ['urgent_need'] and confidence > 0.5:
             return True
         
-        # Service-specific requests
-        service_keywords = ['certificate', 'registration', 'consultation', 'quote', 'pricing']
-        if any(keyword in query for keyword in service_keywords):
+        # Exclude definition questions and registration info from triggering company info
+        definition_keywords = ['what is', 'what are', 'define', 'definition', 'meaning of', 'explain']
+        registration_info_keywords = ['how to register', 'how do i register', 'register for', 'registration process']
+        
+        if any(keyword in query for keyword in definition_keywords + registration_info_keywords):
+            return False
+        
+        # Help requests and service inquiries only
+        help_keywords = ['help', 'assist', 'support', 'guidance', 'who will help', 'can you help', 'need help']
+        service_keywords = ['consultation', 'quote', 'pricing', 'cost of service']
+        
+        if any(keyword in query for keyword in help_keywords + service_keywords):
             return True
         
         # Progressive engagement-based connection
@@ -211,21 +220,7 @@ class IntentDetector:
     
     def get_connection_message(self, intent: str, user_name: Optional[str] = None) -> str:
         """Generate appropriate connection suggestion message"""
-        name_prefix = f"{user_name}, " if user_name else ""
-        
-        messages = {
-            'high_interest': f"It sounds like you're looking for comprehensive EPR solutions! Our ReCircle team specializes in helping businesses achieve full compliance. Would you like to connect with our experts for personalized guidance?",
-            
-            'urgent_need': f"I understand this is urgent! Our ReCircle team has helped many companies handle time-sensitive compliance requirements. Let me connect you with our specialists who can provide immediate assistance.",
-            
-            'service_specific': f"For specific services like EPR certificates and compliance management, our ReCircle team can provide end-to-end solutions. Would you like to speak with our experts about your requirements?",
-            
-            'business_inquiry': f"Since you're exploring EPR solutions for your business, our ReCircle team can provide tailored compliance strategies. Would you like to schedule a consultation with our specialists?"
-        }
-        
-        return messages.get(intent, 
-            f"Our ReCircle team would be happy to help you with personalized EPR solutions. Would you like to connect with our experts?"
-        )
+        return "Our ReCircle team would be happy to help you with personalized EPR solutions. Would you like to connect with our experts?"
 
 # Global instance
 intent_detector = IntentDetector()

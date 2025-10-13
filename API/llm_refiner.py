@@ -2,11 +2,16 @@ from google import genai
 from google.genai import types
 from typing import List, Dict, Optional, Tuple
 import os
+import logging
 from dotenv import load_dotenv
 from intent_detector import IntentDetector, IntentResult
 from context_manager import context_manager
 from proactive_engagement import proactive_engagement
 from lead_qualification import lead_qualification
+from contextwindow import context_window
+
+# Setup logging
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -31,7 +36,17 @@ def refine_with_gemini(
     history: List[Dict[str, str]],
     is_first_message: bool = False,
     session_id: str = None,
+    source_info: Dict = None,
 ) -> Tuple[str, IntentResult, Dict]:
+    
+    # Add current query to context window
+    if session_id:
+        context_window.add_query(session_id, query)
+    # Log query processing
+    logger.info(f"🤖 Processing query for session {session_id}: {query[:100]}...")
+    if source_info:
+        logger.info(f"📚 Using source: {source_info['collection_name']} collection, chunk {source_info['chunk_id']}, confidence: {source_info.get('confidence_score', 'N/A')}")
+    
     # Analyze user intent
     intent_result = intent_detector.analyze_intent(query, history)
     
@@ -42,11 +57,15 @@ def refine_with_gemini(
     if session_id:
         proactive_engagement.track_user_journey(session_id, query, intent_result.intent)
     
-    # Build a history string for the prompt
-    history_str = ""
-    for message in history:
-        role = "User" if message.get("role") == "user" else "Assistant"
-        history_str += f'{role}: {message.get("text", "")}\n'
+    # Get context from context window instead of history
+    context_str = ""
+    if session_id:
+        context_str = context_window.get_context_string(session_id)
+    else:
+        # Fallback to history if no session_id
+        for message in history:
+            role = "User" if message.get("role") == "user" else "Assistant"
+            context_str += f'{role}: {message.get("text", "")}\n'
 
     # Greeting prefix if it's the first message and we have a name
     greeting_prefix = f"Start your answer with: 'Hi {user_name},'\n" if is_first_message and user_name else ""
@@ -59,24 +78,54 @@ def refine_with_gemini(
         context_instructions += f"NOTE: User is from {user_context['industry']} industry. Tailor response accordingly.\n"
 
     prompt_text = (
-        f'You are {bot_name}, a friendly and helpful AI assistant for ReCircle.\n'
-        'Your primary goal is to provide clear and concise answers based on the information provided.\n\n'
+        f'You are {bot_name}, an EPR assistant for ReCircle.\n'
+        'Answer questions directly without assumptions about the user.\n\n'
         f'{greeting_prefix}'
-        '## CONVERSATION HISTORY (for context):\n'
-        f'{history_str}\n'
+        '## CONVERSATION CONTEXT:\n'
+        f'{context_str}\n\n'
         '## CURRENT USER QUESTION:\n'
         f'{query}\n\n'
-        '## KNOWLEDGE BASE INFORMATION (This is your primary source of truth. Base your answer on this):\n'
-        f'---\n{raw_answer}\n---\n\n'
-        '## INSTRUCTIONS:\n'
-        '1. Based on the KNOWLEDGE BASE INFORMATION, answer the CURRENT USER QUESTION.\n'
-        '2. Use the CONVERSATION HISTORY to understand the context of the question.\n'
-        '3. Keep your reply short, clear, and friendly. Do not repeat the user\'s name after the initial greeting.\n'
-        f'4. If asked for contact details, provide the official phone number ({phone_number}) or email ({email}). Do not invent contact details.\n'
-       '5. Only answer questions about plastic waste, EPR, or ReCircle. For unrelated questions, politely decline and steer the conversation back to relevant topics.\n'
-       f'6. If the user asks your name or identity (e.g., "What is your name?", "Who are you?"), reply clearly: "I\'m {bot_name}, your assistant from ReCircle."\n'
+        '## INFORMATION:\n'
+        f'{raw_answer}\n\n'
+        '## GUIDELINES:\n'
+        '1. Answer the question directly without generic prefixes\n'
+        '2. Do NOT assume user business type (FMCG, manufacturer, etc.)\n'
+        '3. Do NOT add phrases like "brands like yours" or similar assumptions\n'
+        '4. Use bullet points (•) for clear formatting\n'
+        '5. Keep responses focused and actionable\n'
+        '6. Do NOT include document references, page numbers, or section links\n'
+        '7. Provide complete step-by-step information when available\n'
+        f'8. For contact: {phone_number} or {email}\n'
+        '9. Focus only on EPR and plastic waste topics\n'
         f'{context_instructions}'
     )
+#     prompt_text = (
+#     f'You are {bot_name}, a friendly and helpful AI assistant for ReCircle specializing in EPR (Extended Producer Responsibility) and plastic waste management.\n'
+#     'Your expertise covers four key areas based on our knowledge base collections:\n'
+#     '• PRODUCER guidance: Manufacturing, production processes, MSME producers\n'
+#     '• IMPORTER regulations: Import rules, customs, foreign trade compliance\n'
+#     '• BRAND OWNER responsibilities: Brand management, trademark holders, PIBOs\n'
+#     '• GENERAL EPR: Rules, regulations, compliance for all stakeholders\n\n'
+#     f'{greeting_prefix}'
+#     '## CONVERSATION HISTORY (for context):\n'
+#     f'{history_str}\n'
+#     '## CURRENT USER QUESTION:\n'
+#     f'{query}\n\n'
+#     '## KNOWLEDGE BASE INFORMATION (This is your primary source of truth from our specialized collections):\n'
+#     f'---\n{raw_answer}\n---\n\n'
+#     '## RESPONSE GUIDELINES:\n'
+#     '1. Base your answer STRICTLY on the KNOWLEDGE BASE INFORMATION provided above.\n'
+#     '2. Use CONVERSATION HISTORY to understand context and provide personalized responses.\n'
+#     '3. Identify which EPR category the question relates to (Producer/Importer/Brand Owner/General) and tailor your expertise accordingly.\n'
+#     '4. Keep responses concise, actionable, and professional. Avoid repeating the user\'s name after initial greeting.\n'
+#     f'5. For contact requests, provide: Phone ({phone_number}) or Email ({email}). Never invent contact details.\n'
+#     '6. SCOPE: Only answer EPR, plastic waste management, or ReCircle questions. For off-topic queries, politely redirect to relevant topics.\n'
+#     f'7. IDENTITY: If asked who you are, respond: "I\'m {bot_name}, your EPR compliance assistant from ReCircle."\n'
+#     '8. COMPLIANCE FOCUS: Emphasize regulatory compliance, deadlines, and actionable steps when relevant.\n'
+#     '9. If information is insufficient, acknowledge limitations and suggest contacting our specialists.\n'
+#     f'{context_instructions}'
+# )
+
 
     contents = [
         types.Content(
@@ -106,8 +155,19 @@ def refine_with_gemini(
 
     refined_answer = result.strip()
     
+    # Update context window with bot response
+    if session_id:
+        context_window.update_response(session_id, refined_answer)
+    
+    # Log response generation
+    logger.info(f"✅ Generated response for session {session_id}, length: {len(refined_answer)} chars")
+    if source_info and source_info.get('threshold_met', False):
+        logger.info(f"🔍 Query satisfied with high confidence from {source_info['collection_name']} collection")
+    elif source_info:
+        logger.info(f"⚠️ Query answered with low confidence - may need specialist assistance")
+    
     # Personalize response based on context
-    refined_answer = context_manager.personalize_response(refined_answer, user_context, user_name)
+    refined_answer = context_manager.personalize_response(refined_answer, user_context, query, user_name)
     
     # Add qualification question if appropriate
     message_count = len([msg for msg in history if msg.get('role') == 'user']) + 1
@@ -117,6 +177,12 @@ def refine_with_gemini(
         qual_question = lead_qualification.get_next_qualification_question(user_context, history)
         if qual_question:
             refined_answer += f"\n\n{qual_question}"
+    
+    # Remove duplicate CTO info - it will be added in connection message if needed
+    # query_lower = query.lower()
+    # if any(word in query_lower for word in ["help", "assistance", "support", "contact"]) and "recircle" in query_lower:
+    #     cto_info = "\n\n🔧 **Technical Support**: For advanced technical queries or partnerships, you can reach out to our CTO who leads our technology initiatives in EPR compliance and waste management solutions."
+    #     refined_answer += cto_info
     
     # Modify response if connection should be suggested
     if intent_result.should_connect:
@@ -129,6 +195,13 @@ def refine_with_gemini(
         elif user_context.get('urgency') == 'high':
             urgency_message = "\n🚀 **Priority Support**: We can fast-track your requirements and connect you with our specialists today."
         
-        refined_answer = f"{connection_message}{urgency_message}\n\nFor immediate assistance:\n📞 Call us: {phone_number}\n📧 Email: {email}\n\n---\n\nAdditional Information:\n{refined_answer}"
+        refined_answer = f"{refined_answer}\n\n---\n\n{connection_message}{urgency_message}\n\n📞 Call us: {phone_number}\n📧 Email: {email}"
+    
+    # Add source information to user context
+    if source_info:
+        user_context['source_info'] = source_info
+        threshold_status = "✅ PASSED" if source_info.get('threshold_met', False) else "❌ FAILED"
+        logger.info(f"📊 Response sourced from: {source_info['collection_name']} collection")
+        logger.info(f"   🔢 Chunk: {source_info['chunk_id']}, Confidence: {source_info['confidence_score']}, Threshold: {threshold_status}")
     
     return refined_answer, intent_result, user_context

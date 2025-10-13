@@ -2,10 +2,11 @@ import pandas as pd
 import chromadb
 from sentence_transformers import SentenceTransformer
 import os
+from config import CHROMA_DB_PATH
 
 def setup_chromadb():
     # Initialize ChromaDB client
-    client = chromadb.PersistentClient(path="./chroma_db")
+    client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
     
     # Create or get collection
     collection = client.get_or_create_collection(

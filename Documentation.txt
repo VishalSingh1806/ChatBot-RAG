@@ -1,0 +1,48 @@
+Types of Interaction with LLM
+1. Prompt Based- Directly user interact with llm like the normal communication by given prompts
+2. Context Based- Create a COntext and then give a context to llm and accirdingly it will ans thhe question
+
+
+Types of Paths-
+Absolute path
+Relative path-r
+
+gemini_pdf_processor.py-Chunking,Emebedding and then storing in collection(Indexing)
+llm_refiner-
+
+Git Commands-
+
+1. Check Status:git status
+-Shows modified files, staged changes, current branch
+
+2. Pull Latest Changes:git pull /git pull origin main
+-Downloads and merges remote changes to local branch
+
+3. Push Changes:git push / git push origin branch-name
+-Uploads local commits to remote repository
+
+4. List Branches:git branch / git branch -a
+-Shows local branches (-a shows remote branches too)
+
+5. Create Branch:git branch feature-name / git checkout -b feature-name
+-Creates new branch (second command creates and switches)
+
+6. Switch Branch:git checkout main / git checkout feature-name
+-Switches to specified branch
+
+7. Stash Operations:git stash / git stash save "work in progress"
+-Save Work Temporarily
+-Saves uncommitted changes temporarily
+
+8. Commit Workflow
+Add Files:git add .  / git add filename.py
+
+
+9. Commit Changes:git commit -m "commit message"
+-Saves staged changes with message
+
+##Complete Workflow:
+1. git add .
+2. git commit -m "fix: update authentication"
+3. git push origin feature-name
+

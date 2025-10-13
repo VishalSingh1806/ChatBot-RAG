@@ -5,10 +5,11 @@ ChromaDB Management Script
 
 import chromadb
 import sys
+from config import CHROMA_DB_PATH
 
 def reset_db():
     """Reset the ChromaDB database"""
-    client = chromadb.PersistentClient(path="./chroma_db")
+    client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
     try:
         client.delete_collection(name="epr_knowledge")
         print("Database reset successfully!")
@@ -17,7 +18,7 @@ def reset_db():
 
 def check_db():
     """Check database status"""
-    client = chromadb.PersistentClient(path="./chroma_db")
+    client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
     try:
         collection = client.get_collection(name="epr_knowledge")
         count = collection.count()

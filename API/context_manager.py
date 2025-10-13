@@ -82,24 +82,27 @@ class ContextManager:
                 return location.title()
         return None
     
-    def personalize_response(self, base_response: str, context: Dict, user_name: str = None) -> str:
+    def _is_help_query(self, query: str) -> bool:
+        """Check if query is asking for help/assistance vs theoretical information"""
+        help_keywords = ['help', 'assist', 'support', 'guidance', 'consultation', 'advice', 'solution', 'reach out', 'contact']
+        theory_keywords = ['what is', 'define', 'definition', 'meaning', 'explain', 'category', 'type']
+        
+        query_lower = query.lower()
+        has_help = any(keyword in query_lower for keyword in help_keywords)
+        has_theory = any(keyword in query_lower for keyword in theory_keywords)
+        
+        return has_help and not has_theory
+    
+    def personalize_response(self, base_response: str, context: Dict, query: str = "", user_name: str = None) -> str:
         """Personalize response based on user context"""
         if not any(context.values()):
             return base_response
         
         personalization = []
         
-        # Industry-specific messaging
-        if context['industry']:
-            industry_messages = {
-                'manufacturing': "For manufacturing companies, EPR compliance is crucial for production continuity.",
-                'fmcg': "FMCG brands like yours need comprehensive EPR strategies for all product packaging.",
-                'ecommerce': "E-commerce platforms require EPR compliance for all packaging materials used.",
-                'pharma': "Pharmaceutical companies have specific EPR requirements for medicine packaging.",
-                'food': "Food businesses need EPR compliance for all packaging from primary to tertiary levels."
-            }
-            if context['industry'] in industry_messages:
-                personalization.append(industry_messages[context['industry']])
+        # Only add company info for help queries, not theoretical questions
+        if self._is_help_query(query):
+            personalization.append("For personalized assistance and expert consultation, contact ReCircle - your trusted EPR compliance partner.")
         
         # Urgency-based messaging
         if context['urgency'] == 'critical':
@@ -107,12 +110,8 @@ class ContextManager:
         elif context['urgency'] == 'high':
             personalization.append("We understand the urgency and can fast-track your compliance process.")
         
-        # Volume-based messaging
-        if context['plastic_volume']:
-            personalization.append(f"With your plastic usage of {context['plastic_volume']}, you'll need a robust EPR strategy.")
-        
         if personalization:
-            return f"{' '.join(personalization)}\n\n{base_response}"
+            return f"{base_response}\n\n{' '.join(personalization)}"
         
         return base_response
 

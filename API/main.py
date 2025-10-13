@@ -118,7 +118,8 @@ async def handle_query(request: Request, query: QueryRequest):
             raw_answer=result["answer"],
             history=history,
             is_first_message=(len(history) == 0),
-            session_id=session_id
+            session_id=session_id,
+            source_info=result.get("source_info", {})
         )
 
         # Calculate engagement score from intent detector
@@ -151,7 +152,8 @@ async def handle_query(request: Request, query: QueryRequest):
                 "industry": user_context.get('industry'),
                 "urgency": user_context.get('urgency'),
                 "engagement_score": engagement_score
-            }
+            },
+            "source_info": result.get("source_info", {})
         }
     except Exception as e:
         logging.error(f"❌ Error in /query endpoint: {e}", exc_info=True)

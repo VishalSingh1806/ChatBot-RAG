@@ -136,10 +136,7 @@ class LeadQualification:
     
     def should_ask_qualification_question(self, message_count: int, engagement_score: float, context: Dict) -> bool:
         """Determine if we should ask a qualification question"""
-        # Ask after some engagement but before overwhelming
-        if message_count >= 3 and engagement_score >= 2.0:
-            missing_info = self._identify_missing_info(context, [])
-            return len(missing_info) > 0
+        # Disabled - no automatic qualification questions
         return False
 
 lead_qualification = LeadQualification()
