@@ -10,10 +10,13 @@ from lead_qualification import lead_qualification
 class LeadManager:
     def __init__(self):
         self.lead_scores = {
+            'sales_opportunity': 9,
+            'contact_intent': 10,
+            'company_inquiry': 8,
             'high_interest': 8,
             'urgent_need': 10,
             'service_specific': 7,
-            'business_inquiry': 6,
+            'business_inquiry': 8,
             'general_inquiry': 3
         }
         
@@ -79,7 +82,7 @@ class LeadManager:
             lead_data['lead_score'] = max(1, int(calculated_score))  # Minimum score of 1
             
             # Track high interest queries
-            if intent_result.intent in ['high_interest', 'urgent_need', 'service_specific']:
+            if intent_result.intent in ['sales_opportunity', 'contact_intent', 'high_interest', 'urgent_need', 'service_specific']:
                 lead_data['high_interest_queries'] += 1
             
             if intent_result.should_connect:
@@ -127,6 +130,12 @@ class LeadManager:
         if priority == 'critical' and lead_data.get('backend_notified') != 'true':
             await self._notify_critical_lead(lead_data)
             return  # Exit early for critical leads
+        
+        # Immediate hot lead for high-value intents
+        primary_intent = self._get_primary_intent(lead_data)
+        if primary_intent in ['contact_intent', 'sales_opportunity'] or lead_data['lead_score'] >= 9:
+            await self._notify_hot_lead(lead_data, {'high_value_intent': True})
+            return
         
         # Hot lead criteria - fixed to prevent false triggers
         hot_lead_criteria = {

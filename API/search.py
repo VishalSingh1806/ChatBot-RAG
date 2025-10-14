@@ -12,8 +12,10 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Set up Google Cloud credentials
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+# Set up Google Cloud credentials (only if available)
+credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+if credentials_path:
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = credentials_path
 
 # Initialize ChromaDB client
 client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
@@ -39,8 +41,10 @@ def get_recircle_info(query: str) -> str:
     """Get ReCircle company information based on query"""
     query_lower = query.lower()
     
-    if any(word in query_lower for word in ["office", "location", "address", "mumbai", "where"]):
-        return "ReCircle Office Location:\n• Address: 3rd Floor, APML Tower, Vishveshwar Nagar Rd, Yashodham, Goregaon, Mumbai, Maharashtra 400063\n• Phone: 9004240004\n• Email: info@recircle.in\n• For office visits or meetings, please call ahead to schedule an appointment."
+    if any(word in query_lower for word in ["contact", "details", "phone", "email", "reach"]):
+        return "ReCircle Contact Details:\n\n• Mumbai Office: 3rd Floor, APML Tower, Vishveshwar Nagar Rd, Yashodham, Goregaon, Mumbai, Maharashtra 400063\n• Phone: 9004240004\n• Email: info@recircle.in\n\nFor personalized EPR compliance assistance and expert consultation, contact us today!"
+    elif any(word in query_lower for word in ["office", "location", "address", "mumbai", "where"]):
+        return "ReCircle Office Location:\n• Mumbai: 3rd Floor, APML Tower, Vishveshwar Nagar Rd, Yashodham, Goregaon, Mumbai, Maharashtra 400063\n• Phone: 9004240004\n• Email: info@recircle.in\n• For office visits or meetings, please call ahead to schedule an appointment."
     elif any(word in query_lower for word in ["cto", "chief technology officer", "technology head"]):
         return "ReCircle's Chief Technology Officer (CTO) leads our technology initiatives in EPR compliance and waste management solutions. For technical partnerships or technology-related inquiries, contact us at info@recircle.in or 9004240004."
     elif any(word in query_lower for word in ["founder", "ceo", "leadership", "team"]):
@@ -53,190 +57,43 @@ def get_recircle_info(query: str) -> str:
         return "ReCircle specializes in EPR compliance, plastic waste management, and sustainability solutions for businesses across India."
 
 def generate_related_questions(user_query: str, search_results: list = None) -> list:
-    """Generate contextually relevant questions based on user query and search results"""
+    """Generate 3 highly relevant questions based on user query"""
     query_lower = user_query.lower()
     
-    # Registration-related queries
-    if any(word in query_lower for word in ["register", "registration", "documents", "apply"]):
-        return [
-            "What documents are needed for EPR registration?",
-            "How long does EPR registration take?",
-            "What is the EPR registration fee?",
-            "How do I renew my EPR certificate?",
-            "Can I register multiple brands under one EPR?"
-        ]
+    # Generate questions based on specific query patterns with more variety
+    if "what is epr" in query_lower:
+        return ["Who needs to comply with EPR rules?", "How much does EPR registration cost?", "What are the EPR compliance deadlines?"]
     
-    # Compliance-related queries
-    elif any(word in query_lower for word in ["compliance", "target", "achieve", "meet"]):
-        return [
-            "How do I meet my EPR targets?",
-            "What are EPR compliance requirements?",
-            "How often do I need to report under EPR?",
-            "What happens if I miss my EPR target?",
-            "How are EPR targets calculated?"
-        ]
+    elif "producer" in query_lower and ("help" in query_lower or "waste" in query_lower or "dispose" in query_lower):
+        return ["What is the EPR registration process for producers?", "How much are EPR compliance costs?", "What happens if I don't comply with EPR?"]
     
-    # Certificate-related queries
-    elif any(word in query_lower for word in ["certificate", "validity", "renew"]):
-        return [
-            "How long is my EPR certificate valid?",
-            "How do I renew my EPR certificate?",
-            "What is a recycling certificate?",
-            "How do I get a recycling certificate?",
-            "Can I transfer my EPR certificate?"
-        ]
+    elif "producer responsibilities" in query_lower or "producer responsibility" in query_lower:
+        return ["How much does producer EPR registration cost?", "What are the penalties for non-compliance?", "How can ReCircle help with EPR compliance?"]
     
-    # Penalty-related queries
-    elif any(word in query_lower for word in ["penalty", "fine", "non-compliance", "violation"]):
-        return [
-            "What are the penalties for EPR non-compliance?",
-            "How can I avoid EPR penalties?",
-            "What happens if I don't comply with EPR?",
-            "Can I appeal against EPR penalties?",
-            "How much are EPR fines?"
-        ]
+    elif "how do producers register" in query_lower or "producer register" in query_lower:
+        return ["What documents do I need for EPR registration?", "How long does the EPR registration process take?", "Can ReCircle help me with EPR registration?"]
     
-    # Recycling-related queries
-    elif any(word in query_lower for word in ["recycle", "recycling", "waste", "disposal"]):
-        return [
-            "How is plastic waste recycled?",
-            "What types of plastic can be recycled?",
-            "How do I find authorized recyclers?",
-            "What are recycling certificates?",
-            "How do I dispose of non-recyclable plastic?"
-        ]
+    elif "registration" in query_lower or "register" in query_lower:
+        return ["What documents are required for EPR registration?", "How much does EPR registration cost?", "How can ReCircle assist with registration?"]
     
-    # Producer-specific queries
-    elif any(word in query_lower for word in ["producer", "manufacturer", "production"]):
-        return [
-            "What are producer responsibilities under EPR?",
-            "How do producers comply with EPR?",
-            "What documents do producers need for EPR?",
-            "How do producers calculate plastic usage?",
-            "Can producers handle EPR compliance in-house?"
-        ]
+    elif "penalty" in query_lower or "fine" in query_lower:
+        return ["How much are EPR violation penalties?", "How can I avoid EPR fines?", "What are the consequences of non-compliance?"]
     
-    # Importer-specific queries
-    elif any(word in query_lower for word in ["import", "importer", "imported goods"]):
-        return [
-            "How do importers comply with EPR?",
-            "Are imported goods covered under EPR?",
-            "What are importer responsibilities under EPR?",
-            "How do importers report plastic usage?",
-            "Can exporters be exempt from EPR?"
-        ]
+    elif "certificate" in query_lower:
+        return ["How do I obtain EPR certificates?", "What is the validity period of EPR certificates?", "How do I renew my EPR certificates?"]
     
-    # Brand owner queries
-    elif any(word in query_lower for word in ["brand", "brand owner", "pibo"]):
-        return [
-            "What are brand owner responsibilities under EPR?",
-            "How do brand owners comply with EPR?",
-            "Are brand owners responsible for third-party packaging?",
-            "What is a PIBO under EPR?",
-            "How do brand owners track packaging waste?"
-        ]
+    elif "importer" in query_lower:
+        return ["What are importer EPR obligations?", "How do importers register for EPR?", "What documents do importers need for EPR?"]
     
-    # ReCircle-specific queries - context-aware suggestions
-    elif any(word in query_lower for word in ["recircle"]):
-        if "contact" in query_lower or "reach" in query_lower:
-            return [
-                "What services does ReCircle offer?",
-                "How can ReCircle help with EPR compliance?",
-                "What is ReCircle's Plastic Neutral Program?",
-                "Can ReCircle handle my entire EPR process?",
-                "What are ReCircle's office locations?"
-            ]
-        elif "service" in query_lower or "offer" in query_lower:
-            return [
-                "How can ReCircle help with EPR compliance?",
-                "What is ReCircle's Plastic Neutral Program?",
-                "Can ReCircle handle my entire EPR process?",
-                "How do I contact ReCircle?",
-                "What are ReCircle's pricing options?"
-            ]
-        elif "plastic neutral" in query_lower:
-            return [
-                "How does plastic neutrality work?",
-                "What are the benefits of plastic neutrality?",
-                "How long does it take to achieve plastic neutrality?",
-                "What documents are needed for plastic neutrality?",
-                "How is plastic neutrality verified?"
-            ]
-        elif "handle" in query_lower or "process" in query_lower:
-            return [
-                "What is ReCircle's step-by-step EPR process?",
-                "How long does EPR compliance take with ReCircle?",
-                "What documents does ReCircle need from me?",
-                "How does ReCircle track my EPR progress?",
-                "What are ReCircle's success rates?"
-            ]
-        elif "what is" in query_lower or "about" in query_lower:
-            return [
-                "What services does ReCircle offer?",
-                "How can ReCircle help with EPR compliance?",
-                "What makes ReCircle different from competitors?",
-                "How long has ReCircle been in business?",
-                "What industries does ReCircle serve?"
-            ]
-        else:
-            # Fallback for other ReCircle queries
-            return [
-                "What services does ReCircle offer?",
-                "How can ReCircle help with EPR compliance?",
-                "How do I contact ReCircle?",
-                "What is ReCircle's Plastic Neutral Program?",
-                "Can ReCircle handle my entire EPR process?"
-            ]
+    elif "credit" in query_lower or "calculate" in query_lower:
+        return ["How are EPR credits calculated?", "Where can I purchase EPR credits?", "What factors determine EPR credit pricing?"]
     
-    # Help/support queries - focus on assistance
-    elif any(word in query_lower for word in ["help", "support", "assistance"]):
-        return [
-            "How can ReCircle help with EPR compliance?",
-            "What services does ReCircle offer?",
-            "How do I contact ReCircle?",
-            "Can ReCircle handle my entire EPR process?",
-            "What is ReCircle's emergency support?"
-        ]
+    elif "recircle" in query_lower:
+        return ["What EPR services does ReCircle provide?", "How can ReCircle help with compliance?", "What are ReCircle's contact details?"]
     
-    # Plastic/category queries
-    elif any(word in query_lower for word in ["plastic", "category", "c1", "c2", "c3", "c4", "c5"]):
-        return [
-            "What are plastic categories C1, C2, C3, C4, C5?",
-            "What is rigid plastic packaging?",
-            "What is flexible plastic packaging?",
-            "How are plastic categories defined?",
-            "Which plastic category applies to my product?"
-        ]
-    
-    # Fee/cost queries
-    elif any(word in query_lower for word in ["fee", "cost", "price", "charge", "amount"]):
-        return [
-            "What is the EPR registration fee?",
-            "How much does EPR compliance cost?",
-            "Are there annual fees for EPR?",
-            "What are the penalties for non-compliance?",
-            "How are EPR fees calculated?"
-        ]
-    
-    # Timeline queries
-    elif any(word in query_lower for word in ["time", "duration", "long", "when", "deadline"]):
-        return [
-            "How long does EPR registration take?",
-            "What are EPR compliance deadlines?",
-            "When do I need to submit EPR reports?",
-            "How often are EPR audits conducted?",
-            "What is the validity period of EPR certificate?"
-        ]
-    
-    # Default EPR-related questions
+    # Default varied questions
     else:
-        return [
-            "What is EPR?",
-            "Who needs to comply with EPR rules?",
-            "How do I register for EPR?",
-            "What are EPR compliance requirements?",
-            "What documents are needed for EPR registration?"
-        ]
+        return ["What are the key EPR compliance requirements?", "How much does EPR registration typically cost?", "How can ReCircle help with my EPR needs?"]
 
 def find_best_answer(user_query: str) -> dict:
     logger.info(f"🔍 Searching for query: {user_query[:100]}...")
@@ -334,81 +191,45 @@ def find_best_answer(user_query: str) -> dict:
     # If no results with threshold, use best available results
     if not filtered_results and all_results:
         logger.warning(f"⚠️ Using best available results (distance: {all_results[0]['distance']:.4f})")
-        filtered_results = all_results[:3]  # Use top 3 results
+        filtered_results = all_results[:3]
     
     if not filtered_results:
-        logger.warning("❌ No results found at all")
         return {
-            "answer": "I don't have information about that topic. For personalized assistance, contact ReCircle at info@recircle.in or 9004240004.",
+            "answer": "I don't have information about that topic.",
             "suggestions": generate_related_questions(user_query),
-            "source_info": {
-                "collection_name": "none",
-                "chunk_id": 0,
-                "source_document": "none",
-                "pdf_index": 0,
-                "confidence_score": 0,
-                "total_results_found": len(all_results),
-                "confidence_threshold": confidence_threshold,
-                "threshold_met": False
-            }
+            "source_info": {}
         }
     
-    # Get best result from filtered results
+    # Get best result
     best_result = filtered_results[0]
     
-    # Log the best match with detailed info
-    logger.info(f"✅ Best match from '{best_result['collection']}' collection")
-    logger.info(f"   📄 Source: {best_result['source']}")
-    logger.info(f"   🔢 Chunk ID: {best_result['chunk_id']}")
-    logger.info(f"   📊 Distance: {best_result['distance']:.4f}")
-    logger.info(f"   🎯 Confidence: {round(1 - best_result['distance'], 4)}")
-    
-    # Combine top 3 relevant chunks for comprehensive answer
-    top_chunks = filtered_results[:3]
+    # Combine top results for comprehensive answer
     combined_text = ""
-    
-    for i, result in enumerate(top_chunks):
+    for result in filtered_results[:3]:
         doc = result['document']
-        # Clean up text and add if it's quality content
-        if len(doc) > 30 and doc.count('uni') < 5:
+        if len(doc) > 30:
             if combined_text:
                 combined_text += "\n\n"
             combined_text += doc.strip()
     
-    # Check for ReCircle-specific queries
+    answer = combined_text if combined_text else filtered_results[0]['document']
+    
+    # Check for ReCircle-specific queries only
     query_lower = user_query.lower()
-    if any(word in query_lower for word in ["recircle", "company", "cto", "team", "leadership"]):
-        # ReCircle-specific queries
+    if any(word in query_lower for word in ["recircle", "contact details", "contact"]):
         recircle_info = get_recircle_info(user_query)
         answer = recircle_info
-    else:
-        # Use combined text if available, otherwise use best single result
-        answer = combined_text if combined_text else filtered_results[0]['document']
-        
-        # Add ReCircle info for help/assistance queries or when answer is short
-        if any(word in query_lower for word in ["help", "assistance", "support", "contact", "reach out"]) or len(answer) < 100:
-            if not answer.endswith("."):
-                answer += "."
-            answer += "\n\nFor personalized assistance and expert consultation, contact ReCircle at info@recircle.in or 9004240004."
     
-    # Generate contextually relevant suggestions
+    # Generate suggestions
     suggestions = generate_related_questions(user_query, filtered_results)
-    
-    # Prepare source information
-    source_info = {
-        "collection_name": best_result['collection'],
-        "chunk_id": best_result['chunk_id'],
-        "source_document": best_result['source'],
-        "pdf_index": best_result['pdf_index'],
-        "confidence_score": round(1 - best_result['distance'], 4),  # Convert distance to confidence
-        "total_results_found": len(all_results),
-        "filtered_results_count": len(filtered_results),
-        "confidence_threshold": confidence_threshold,
-        "threshold_met": True
-    }
     
     return {
         "answer": answer,
         "suggestions": suggestions,
-        "source_info": source_info
+        "source_info": {
+            "collection_name": best_result['collection'],
+            "chunk_id": best_result['chunk_id'],
+            "source_document": best_result['source'],
+            "confidence_score": round(1 - best_result['distance'], 4)
+        }
     }

@@ -100,9 +100,7 @@ class ContextManager:
         
         personalization = []
         
-        # Only add company info for help queries, not theoretical questions
-        if self._is_help_query(query):
-            personalization.append("For personalized assistance and expert consultation, contact ReCircle - your trusted EPR compliance partner.")
+        # Remove company promotion - handled elsewhere
         
         # Urgency-based messaging
         if context['urgency'] == 'critical':

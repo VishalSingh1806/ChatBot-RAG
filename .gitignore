@@ -1,115 +1,88 @@
-# ----------------------------
-# Python backend (FastAPI)
-# ----------------------------
+# Sensitive files
+*.env
+.env*
+*credentials*.json
+*key*.json
+*secret*
+*password*
+*token*
 
-# Bytecode and compiled files
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-*.so
-
-# Virtual environment
-venv/
-env/
-
-# Environment variables
-.env
-.env.*
-API/.env
-
-# Google Cloud credentials
-*.json
-epr-chatbot-*.json
-
-# VSCode or PyCharm IDE configs
-.vscode/
-.idea/
-
-# Logs and cache
-*.log
-*.sqlite3
+# Database files
 *.db
-*.bak
-*.swp
-.cache/
-*.pid
-
-# Redis dump files (if any)
-dump.rdb
-
-# Uvicorn reload artifacts
-*.reload
-
-# ----------------------------
-# Database & Heavy Files
-# ----------------------------
-
-# ChromaDB database files
-API/chroma_db/
+*.sqlite*
 chroma_db/
+chromaDB/
+API/chroma_db/
+*/chroma_db/
 
 # Large PDF files
-fwdplasticwastemanagementrules/
 *.pdf
+fwdplasticwastemanagementrules/
 
-# Personal/Test files
-test_*.py
-DBMS_Full_Notes*.pdf
-tree.txt
-.claude/
-pip
-
-# ----------------------------
-# Node frontend (React/Vite)
-# ----------------------------
-
-# Build output
-frontend/dist/
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
 dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# Dependency folders
-node_modules/
-frontend/node_modules/
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+*/venv/
+**/venv/
 
-# Local dev/preview output
-*.local
-*.preview
-*.temp
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
-# Environment configs
-frontend/.env
-frontend/.env.*
-
-# Build cache
-frontend/.vite/
-.vite/
-*.tsbuildinfo
-
-# ----------------------------
-# General
-# ----------------------------
-
-# OS-generated
+# OS
 .DS_Store
 Thumbs.db
-ehthumbs.db
+*.tmp
 
 # Logs
 *.log
+logs/
 
-# Temporary
-*.tmp
+# Node modules (if any)
+node_modules/
+npm-debug.log*
+
+# Docker
+.dockerignore
+
+# Large data files
+*.csv
+data/
+*.xlsx
+*.xls
+
+# Backup files
 *.bak
+*.backup
 
-# Editor-specific
-*.sublime*
-*.code-workspace
-
-# Git hooks
-.husky/
-
-# Lock files (optional to ignore)
-package-lock.json
-# poetry.lock
-# Pipfile.lock
+# Temporary files
+temp/
+tmp/
+*.temp

@@ -1,0 +1,16 @@
+# Handle line endings automatically for cross-platform compatibility
+* text=auto
+
+# Force LF for specific file types
+*.py text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Binary files
+*.pdf binary
+*.jpg binary
+*.png binary
+*.gif binary

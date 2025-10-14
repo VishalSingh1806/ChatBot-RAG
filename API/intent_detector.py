@@ -26,6 +26,50 @@ class IntentDetector:
         
         # Define intent patterns with keywords and phrases
         self.intent_patterns = {
+            'sales_opportunity': {
+                'keywords': [
+                    'i am', 'we are', 'our company', 'my business', 'my organization',
+                    'looking for', 'searching for', 'need solution', 'want solution',
+                    'planning to', 'thinking about', 'considering', 'exploring options',
+                    'budget for', 'cost for', 'price for', 'quote for', 'estimate for'
+                ],
+                'phrases': [
+                    'i am producer', 'i am importer', 'i am manufacturer', 'i am brand owner',
+                    'we are producer', 'we are importer', 'we are manufacturer',
+                    'our company is', 'my business is', 'we manufacture', 'we import',
+                    'we produce', 'we sell', 'we distribute', 'looking for epr',
+                    'need epr compliance', 'want epr help', 'epr solution for us'
+                ],
+                'weight': 0.95
+            },
+            'contact_intent': {
+                'keywords': [
+                    'contact', 'call', 'phone', 'email', 'reach out', 'get in touch',
+                    'speak to', 'talk to', 'connect with', 'meeting', 'consultation',
+                    'help me', 'assist me', 'need help', 'want help', 'require help',
+                    'want to discuss', 'need assistance', 'require assistance'
+                ],
+                'phrases': [
+                    'how to contact', 'want to contact', 'need to contact',
+                    'can you help me', 'i need help', 'i want help', 'want to speak',
+                    'schedule a call', 'book a meeting', 'get assistance',
+                    'talk to someone', 'connect me with', 'reach your team',
+                    'want help for', 'need help with', 'require help with'
+                ],
+                'weight': 1.0
+            },
+            'company_inquiry': {
+                'keywords': [
+                    'recircle', 'company', 'about recircle', 'what is recircle',
+                    'recircle services', 'different from competitors', 'why recircle',
+                    'what makes recircle', 'recircle different', 'about company'
+                ],
+                'phrases': [
+                    'what is recircle', 'about recircle', 'recircle company',
+                    'what makes recircle', 'recircle different', 'why choose recircle'
+                ],
+                'weight': 0.9
+            },
             'high_interest': {
                 'keywords': [
                     'need help', 'want to implement', 'looking for solution', 'interested in',
@@ -48,9 +92,10 @@ class IntentDetector:
                 ],
                 'phrases': [
                     'for our business', 'our organization', 'my company',
-                    'we are a', 'we manufacture', 'we import'
+                    'we are a', 'we manufacture', 'we import', 'i am importer',
+                    'i am producer', 'i am manufacturer'
                 ],
-                'weight': 0.7
+                'weight': 0.8
             },
             'urgent_need': {
                 'keywords': [

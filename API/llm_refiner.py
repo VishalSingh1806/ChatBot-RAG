@@ -76,6 +76,13 @@ def refine_with_gemini(
         context_instructions += "IMPORTANT: This user has urgent requirements. Prioritize immediate assistance and callback offers.\n"
     if user_context.get('industry'):
         context_instructions += f"NOTE: User is from {user_context['industry']} industry. Tailor response accordingly.\n"
+    
+    # Check lead priority and help queries for ReCircle promotion
+    lead_priority = user_context.get('priority', 'low')
+    is_help_query = any(word in query.lower() for word in ['help', 'who will help', 'who can help', 'assist', 'support'])
+    
+    if lead_priority in ['medium', 'high'] or is_help_query:
+        context_instructions += "SPECIAL: This is a priority lead or help request. Promote ReCircle as THE solution provider. Replace generic options with ReCircle-focused answers. Instead of listing multiple options, focus on how ReCircle handles all EPR requirements.\n"
 
     prompt_text = (
         f'You are {bot_name}, an EPR assistant for ReCircle.\n'
@@ -89,14 +96,19 @@ def refine_with_gemini(
         f'{raw_answer}\n\n'
         '## GUIDELINES:\n'
         '1. Answer the question directly without generic prefixes\n'
-        '2. Do NOT assume user business type (FMCG, manufacturer, etc.)\n'
-        '3. Do NOT add phrases like "brands like yours" or similar assumptions\n'
-        '4. Use bullet points (•) for clear formatting\n'
-        '5. Keep responses focused and actionable\n'
-        '6. Do NOT include document references, page numbers, or section links\n'
-        '7. Provide complete step-by-step information when available\n'
-        f'8. For contact: {phone_number} or {email}\n'
-        '9. Focus only on EPR and plastic waste topics\n'
+        '2. For "What is EPR" questions, start with: "EPR stands for Extended Producer Responsibility"\n'
+        '3. Do NOT assume user business type (FMCG, manufacturer, etc.)\n'
+        '4. Do NOT add phrases like "brands like yours" or similar assumptions\n'
+        '5. Use bullet points (•) for clear formatting\n'
+        '6. Keep responses focused and actionable\n'
+        '7. REMOVE all document references, page numbers, section numbers, and manual references\n'
+        '8. Provide complete step-by-step registration process without referencing documents\n'
+        '9. For producer registration, include: portal details, required documents, timeline, and fees\n'
+        f'10. For contact: {phone_number} or {email}\n'
+        '11. For medium/high priority leads OR help queries: Replace generic answers with ReCircle-focused solutions\n'
+        '12. Do NOT add contact info in the main answer - it will be added separately\n'
+        '13. For company queries (about ReCircle): Do NOT add any contact promotion\n'
+        '14. Focus only on EPR and plastic waste topics\n'
         f'{context_instructions}'
     )
 #     prompt_text = (
@@ -166,6 +178,18 @@ def refine_with_gemini(
     elif source_info:
         logger.info(f"⚠️ Query answered with low confidence - may need specialist assistance")
     
+    # Get lead priority from Redis directly for context
+    if session_id:
+        try:
+            from collect_data import redis_client
+            if redis_client:
+                lead_key = f"lead:{session_id}"
+                lead_data = redis_client.hgetall(lead_key)
+                if lead_data:
+                    user_context['priority'] = lead_data.get('priority', 'low')
+        except:
+            pass
+    
     # Personalize response based on context
     refined_answer = context_manager.personalize_response(refined_answer, user_context, query, user_name)
     
@@ -184,8 +208,10 @@ def refine_with_gemini(
     #     cto_info = "\n\n🔧 **Technical Support**: For advanced technical queries or partnerships, you can reach out to our CTO who leads our technology initiatives in EPR compliance and waste management solutions."
     #     refined_answer += cto_info
     
-    # Modify response if connection should be suggested
-    if intent_result.should_connect:
+    # Modify response if connection should be suggested (exclude company queries)
+    is_company_query = any(word in query.lower() for word in ['what is recircle', 'about recircle', 'recircle company', 'recircle different'])
+    
+    if intent_result.should_connect and not is_company_query:
         connection_message = intent_detector.get_connection_message(intent_result.intent, user_name)
         
         # Add urgency-specific messaging
