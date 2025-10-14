@@ -1,4 +1,6 @@
+# =========================
 # Sensitive files
+# =========================
 *.env
 .env*
 *credentials*.json
@@ -6,8 +8,16 @@
 *secret*
 *password*
 *token*
+*.pem
+*.p12
+*.crt
 
+# Ignore Google Cloud or API keys
+epr-chatbot-*.json
+
+# =========================
 # Database files
+# =========================
 *.db
 *.sqlite*
 chroma_db/
@@ -15,11 +25,15 @@ chromaDB/
 API/chroma_db/
 */chroma_db/
 
+# =========================
 # Large PDF files
+# =========================
 *.pdf
 fwdplasticwastemanagementrules/
 
+# =========================
 # Python
+# =========================
 __pycache__/
 *.py[cod]
 *$py.class
@@ -41,7 +55,9 @@ wheels/
 .installed.cfg
 *.egg
 
+# =========================
 # Virtual environments
+# =========================
 venv/
 env/
 ENV/
@@ -49,40 +65,56 @@ ENV/
 */venv/
 **/venv/
 
-# IDE
+# =========================
+# IDE / Editor
+# =========================
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# OS
+# =========================
+# OS-specific
+# =========================
 .DS_Store
 Thumbs.db
 *.tmp
 
+# =========================
 # Logs
+# =========================
 *.log
 logs/
 
+# =========================
 # Node modules (if any)
+# =========================
 node_modules/
 npm-debug.log*
 
+# =========================
 # Docker
+# =========================
 .dockerignore
 
+# =========================
 # Large data files
+# =========================
 *.csv
 data/
 *.xlsx
 *.xls
 
+# =========================
 # Backup files
+# =========================
 *.bak
 *.backup
 
+# =========================
 # Temporary files
+# =========================
 temp/
 tmp/
 *.temp
