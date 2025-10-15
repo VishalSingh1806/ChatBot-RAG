@@ -4,37 +4,37 @@ from starlette.middleware.sessions import SessionMiddleware
 import logging
 import os
 import uuid
+import asyncio
 from models import QueryRequest, QueryResponse, UserData
 from search import find_best_answer
 from llm_refiner import refine_with_gemini
 from collect_data import collect_user_data, get_user_data_from_session, redis_client
 from lead_manager import lead_manager
+from session_reporter import finalize_session
+from session_monitor import start_monitor
 
-# Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# --------------------------------------------------------
+# APP CONFIG
+# --------------------------------------------------------
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 app = FastAPI()
-
-# ✅ Load secret key for session cookies
 SECRET_KEY = os.getenv("SECRET_KEY", "a_default_secret_key_for_development_only")
-
-# Determine if running in production (e.g., on the VM with HTTPS)
 IS_PRODUCTION = os.getenv("APP_ENV") == "production"
 
-# ✅ Session middleware (registered before CORS)
+# --------------------------------------------------------
+# Middleware setup
+# --------------------------------------------------------
 app.add_middleware(
     SessionMiddleware,
     secret_key=SECRET_KEY,
-    # In production (HTTPS), cookies must be 'none' and secure.
-    # For local dev (HTTP), 'lax' and non-secure is required.
     same_site="none" if IS_PRODUCTION else "lax",
     https_only=IS_PRODUCTION,
     session_cookie="session",
-    max_age=86400,          # 24 hours
+    max_age=86400,
     path="/",
 )
 
-# ✅ Apply CORS middleware
 allow_origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -56,62 +56,58 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --------------------------------------------------------
+# Startup event - Start background monitor
+# --------------------------------------------------------
+@app.on_event("startup")
+async def startup_event():
+    logging.info("🚀 Starting EPR ChatBot API")
+    asyncio.create_task(start_monitor())
+    logging.info("✅ Background session monitor started")
+
+# --------------------------------------------------------
+# Routes
+# --------------------------------------------------------
 @app.get("/")
 async def root():
-    """Health check endpoint"""
     return {"message": "Server is running"}
 
 @app.post("/session")
 async def get_or_create_session(request: Request):
-    """Get or create a session for the user"""
     try:
-        # Debug session info
-        logging.info(f"Incoming session request. Session data: {dict(request.session)}")
-        
         if "session_id" not in request.session:
             session_id = str(uuid.uuid4())
             request.session["session_id"] = session_id
             logging.info(f"✅ Created new session: {session_id}")
         else:
             session_id = request.session["session_id"]
-            logging.info(f"✅ Found existing user data for session {session_id}")
-
         user_data = await get_user_data_from_session(session_id)
-
-        response_data = {
+        return {
             "session_id": session_id,
             "user_data_collected": user_data is not None,
             "user_data": user_data
         }
-        logging.info(f"📤 Returning session response for {session_id}")
-        return response_data
-        
     except Exception as e:
-        logging.error(f"❌ Error in /session endpoint: {e}", exc_info=True)
+        logging.error(f"❌ Session creation failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Session creation failed")
 
 @app.post("/query", response_model=QueryResponse)
 async def handle_query(request: Request, query: QueryRequest):
-    """Handle user queries and return responses"""
+    """Handles user query + logs chat + generates answer"""
     try:
         if "session_id" not in request.session:
-            # This is a fallback, but frontend should have established a session.
             request.session["session_id"] = str(uuid.uuid4())
-
         session_id = request.session["session_id"]
-        logging.info(f"🔄 Processing query for session {session_id}: {query.text[:50]}...")
 
-        # Fetch user data from session/Redis to get their name
         user_data = await get_user_data_from_session(session_id)
         user_name = user_data.get("user_name") if user_data else None
-
-        # Get conversation history from the request
         history = query.history or []
 
-        # Find the best answer from knowledge base
-        result = find_best_answer(query.text)
-
-        # Refine the answer with LLM, providing more context
+        # Detect intent first for better question generation
+        from intent_detector import intent_detector
+        intent_result = intent_detector.analyze_intent(query.text, history)
+        
+        result = find_best_answer(query.text, intent_result)
         final_answer, intent_result, user_context = refine_with_gemini(
             user_name=user_name,
             query=query.text,
@@ -122,14 +118,21 @@ async def handle_query(request: Request, query: QueryRequest):
             source_info=result.get("source_info", {})
         )
 
-        # Calculate engagement score from intent detector
         from intent_detector import intent_detector
         engagement_score = intent_detector._calculate_engagement_score(query.text.lower(), history)
 
-        # Debug: Log before calling lead manager
-        logging.info(f"🔄 About to track intent for session {session_id}: {intent_result.intent}")
+        # ✅ Save chat to Redis for PDF report
+        try:
+            chat_key = f"session:{session_id}:chat"
+            redis_client.rpush(chat_key, f"User: {query.text}")
+            redis_client.rpush(chat_key, f"Bot: {final_answer}")
+            redis_client.expire(chat_key, 86400)  # keep chat 1 day
+            chat_count = redis_client.llen(chat_key)
+            logging.info(f"💬 Saved chat to Redis. Total messages: {chat_count}")
+        except Exception as chat_err:
+            logging.error(f"❌ Could not save chat logs: {chat_err}", exc_info=True)
 
-        # Track user intent for lead management
+        # Track user intent
         await lead_manager.track_user_intent(
             session_id=session_id,
             intent_result=intent_result,
@@ -137,8 +140,6 @@ async def handle_query(request: Request, query: QueryRequest):
             user_data=user_data,
             engagement_score=engagement_score
         )
-
-        logging.info(f"✅ Lead tracking completed for session {session_id}")
 
         return {
             "answer": final_answer,
@@ -155,77 +156,56 @@ async def handle_query(request: Request, query: QueryRequest):
             },
             "source_info": result.get("source_info", {})
         }
+
     except Exception as e:
         logging.error(f"❌ Error in /query endpoint: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Query processing failed")
 
 @app.post("/collect_user_data")
 async def handle_user_data(request: Request, user_data: UserData):
-    """Collect and store user data"""
     try:
         if "session_id" not in request.session:
-            logging.warning("No session_id found in /collect_user_data request.")
-            raise HTTPException(status_code=400, detail="Session not found. Please refresh the page.")
-
+            raise HTTPException(status_code=400, detail="Session not found")
         session_id = request.session["session_id"]
-        logging.info(f"Found session_id for data collection: {session_id}")
-        
         user_data.session_id = session_id
-        result = await collect_user_data(user_data)
-        logging.info(f"✅ User data collected successfully for session: {session_id}")
-        return result
-        
-    except HTTPException:
-        raise
+        return await collect_user_data(user_data)
     except Exception as e:
-        logging.error(f"❌ Error in /collect_user_data endpoint: {e}", exc_info=True)
+        logging.error(f"❌ Error collecting user data: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Data collection failed")
 
-
-@app.get("/admin/leads")
-async def get_leads_dashboard():
-    """Admin endpoint to view lead information (add authentication in production)"""
+@app.get("/debug/chat/{session_id}")
+async def debug_chat_logs(session_id: str):
+    """Debug endpoint to check chat logs in Redis"""
     try:
-        if not redis_client:
-            raise HTTPException(status_code=503, detail="Redis not available")
-        
-        # Get all lead keys
-        lead_keys = redis_client.keys("lead:*")
-        leads = []
-        
-        for key in lead_keys:
-            session_id = key.split(":")[1]
-            lead_summary = await lead_manager.get_lead_summary(session_id)
-            if lead_summary:
-                leads.append(lead_summary)
-        
-        # Sort by lead score (highest first)
-        leads.sort(key=lambda x: x['lead_score'], reverse=True)
-        
+        chat_key = f"session:{session_id}:chat"
+        exists = redis_client.exists(chat_key)
+        count = redis_client.llen(chat_key)
+        messages = redis_client.lrange(chat_key, 0, -1)
         return {
-            "total_leads": len(leads),
-            "hot_leads": len([l for l in leads if l['hot_lead']]),
-            "leads": leads[:50]  # Return top 50 leads
+            "session_id": session_id,
+            "chat_key": chat_key,
+            "exists": bool(exists),
+            "message_count": count,
+            "messages": messages
         }
-        
     except Exception as e:
-        logging.error(f"Error fetching leads dashboard: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch leads")
+        logging.error(f"❌ Debug error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/admin/lead/{session_id}")
-async def get_lead_details(session_id: str):
-    """Get detailed information about a specific lead"""
+@app.post("/end_session")
+async def end_chat_session(request: Request):
     try:
-        lead_summary = await lead_manager.get_lead_summary(session_id)
-        if not lead_summary:
-            raise HTTPException(status_code=404, detail="Lead not found")
+        if "session_id" not in request.session:
+            raise HTTPException(status_code=400, detail="Session not found")
+        session_id = request.session["session_id"]
         
-        return lead_summary
+        # Debug: Check chat logs before finalizing
+        chat_key = f"session:{session_id}:chat"
+        chat_count = redis_client.llen(chat_key)
+        logging.info(f"🔍 Finalizing session {session_id} with {chat_count} chat messages")
         
-    except HTTPException:
-        raise
+        finalize_session(session_id)
+        return {"status": "success", "message": f"PDF report generated and emailed for session {session_id}"}
     except Exception as e:
-        logging.error(f"Error fetching lead details: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch lead details")
-
-# uvicorn main:app --reload
+        logging.error(f"❌ Error finalizing session: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to finalize session")

@@ -51,6 +51,7 @@ if SMTP_ENABLED:
 else:
     logging.warning("⚠️ SMTP configuration is incomplete. Email sending is disabled.")
 
+
 async def get_user_data_from_session(session_id: str):
     """Checks Redis for existing user data for a given session ID."""
     if not redis_client:
@@ -89,23 +90,13 @@ async def collect_user_data(user_data: UserData):
         redis_client.hmset(session_key, mapping=user_data_map)
         logging.info(f"✅ Data saved to Redis for key: {session_key}")
 
-        if not SMTP_ENABLED:
-            return JSONResponse(content={"message": "User data collected successfully"}, status_code=200)
+        session_id = user_data.session_id
 
-        batch_to_send = None
-        async with batch_lock:
-            email_batch.append(user_data.dict())
-            logging.info(f"📦 Current email batch size: {len(email_batch)}")
-            if len(email_batch) >= batch_size:
-                logging.info("📤 Batch size met. Preparing to send email...")
-                batch_to_send = list(email_batch)  # Copy the batch
-                email_batch.clear()  # Clear the shared batch
-
-        if batch_to_send:
-            # Sending is done outside the lock to avoid blocking during I/O
-            await send_email_batch(batch_to_send)
-
-        return JSONResponse(content={"message": "User data collected successfully"}, status_code=200)
+        # ✅ Return session_id for chatbot to use (no individual email)
+        return JSONResponse(
+            content={"message": "User data collected successfully", "session_id": session_id},
+            status_code=200,
+        )
 
     except redis.exceptions.ConnectionError as e:
         logging.error(f"❌ Redis connection error in collect_user_data: {e}")
@@ -159,7 +150,6 @@ async def send_email_batch(batch: list):
         msg.attach(MIMEText("\n".join(body_parts), "plain"))
 
         with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
-            # server.set_debuglevel(1)  # Uncomment for deep SMTP debugging
             server.starttls()
             server.login(SMTP_USERNAME, SMTP_PASSWORD)
             server.send_message(msg)

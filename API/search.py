@@ -56,46 +56,163 @@ def get_recircle_info(query: str) -> str:
     else:
         return "ReCircle specializes in EPR compliance, plastic waste management, and sustainability solutions for businesses across India."
 
-def generate_related_questions(user_query: str, search_results: list = None) -> list:
-    """Generate 3 highly relevant questions based on user query"""
+def generate_related_questions(user_query: str, search_results: list = None, intent_result=None) -> list:
+    """Generate dynamic contextually relevant questions using AI"""
     query_lower = user_query.lower()
     
-    # Generate questions based on specific query patterns with more variety
-    if "what is epr" in query_lower:
-        return ["Who needs to comply with EPR rules?", "How much does EPR registration cost?", "What are the EPR compliance deadlines?"]
+    # Check if user is asking for help/assistance or has high priority intent
+    help_keywords = ['help', 'assist', 'support', 'guidance', 'who will help', 'can you help', 'need help']
+    is_help_query = any(keyword in query_lower for keyword in help_keywords)
     
-    elif "producer" in query_lower and ("help" in query_lower or "waste" in query_lower or "dispose" in query_lower):
-        return ["What is the EPR registration process for producers?", "How much are EPR compliance costs?", "What happens if I don't comply with EPR?"]
+    # Check intent priority if available
+    is_high_priority = False
+    if intent_result:
+        high_priority_intents = ['contact_intent', 'sales_opportunity', 'urgent_need', 'high_interest']
+        is_high_priority = (intent_result.intent in high_priority_intents and intent_result.confidence >= 0.6) or intent_result.should_connect
     
-    elif "producer responsibilities" in query_lower or "producer responsibility" in query_lower:
-        return ["How much does producer EPR registration cost?", "What are the penalties for non-compliance?", "How can ReCircle help with EPR compliance?"]
-    
-    elif "how do producers register" in query_lower or "producer register" in query_lower:
-        return ["What documents do I need for EPR registration?", "How long does the EPR registration process take?", "Can ReCircle help me with EPR registration?"]
-    
-    elif "registration" in query_lower or "register" in query_lower:
-        return ["What documents are required for EPR registration?", "How much does EPR registration cost?", "How can ReCircle assist with registration?"]
-    
-    elif "penalty" in query_lower or "fine" in query_lower:
-        return ["How much are EPR violation penalties?", "How can I avoid EPR fines?", "What are the consequences of non-compliance?"]
-    
-    elif "certificate" in query_lower:
-        return ["How do I obtain EPR certificates?", "What is the validity period of EPR certificates?", "How do I renew my EPR certificates?"]
-    
-    elif "importer" in query_lower:
-        return ["What are importer EPR obligations?", "How do importers register for EPR?", "What documents do importers need for EPR?"]
-    
-    elif "credit" in query_lower or "calculate" in query_lower:
-        return ["How are EPR credits calculated?", "Where can I purchase EPR credits?", "What factors determine EPR credit pricing?"]
-    
-    elif "recircle" in query_lower:
-        return ["What EPR services does ReCircle provide?", "How can ReCircle help with compliance?", "What are ReCircle's contact details?"]
-    
-    # Default varied questions
-    else:
-        return ["What are the key EPR compliance requirements?", "How much does EPR registration typically cost?", "How can ReCircle help with my EPR needs?"]
+    # If help query or high priority, include ReCircle contact questions
+    if is_help_query or is_high_priority:
+        recircle_questions = [
+            "How can ReCircle help me with EPR compliance?",
+            "What services does ReCircle offer?",
+            "How do I contact ReCircle for assistance?",
+            "What makes ReCircle different from other EPR service providers?",
+            "Can ReCircle handle my complete EPR compliance?"
+        ]
+        # Mix ReCircle questions with relevant ones
+        try:
+            context_text = ""
+            if search_results:
+                for result in search_results[:2]:
+                    context_text += result.get('document', '')[:150] + " "
+            
+            prompt = f"""User asked: "{user_query}"
 
-def find_best_answer(user_query: str) -> dict:
+Generate 1 specific follow-up question about: {user_query}
+Format: Return ONLY the question, ending with '?'. No numbering."""
+            
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            response = model.generate_content(prompt, generation_config=genai.types.GenerationConfig(temperature=0.9, max_output_tokens=100))
+            
+            if response and response.text:
+                lines = [line.strip().lstrip('0123456789.-*• ').strip() for line in response.text.strip().split('\n')]
+                ai_questions = [line for line in lines if line and '?' in line and len(line) > 10][:1]
+                # Combine: 1 AI question + 2 ReCircle questions = 3 total
+                return ai_questions + recircle_questions[:2]
+        except Exception as e:
+            logger.warning(f"AI question generation failed: {e}")
+        
+        # Fallback: return ReCircle questions
+        return recircle_questions[:3]
+    
+    # Regular AI-generated questions for other queries
+    try:
+        context_text = ""
+        if search_results:
+            for result in search_results[:3]:
+                context_text += result.get('document', '')[:200] + " "
+        
+        prompt = f"""User asked: "{user_query}"
+
+Context from EPR knowledge base:
+{context_text[:500]}
+
+Generate exactly 3 highly relevant follow-up questions that:
+1. Directly relate to the user's query topic
+2. Help them understand next steps or related aspects
+3. Are practical and actionable
+
+Format: Return ONLY the questions, one per line, each ending with '?'. No numbering, bullets, or explanations."""
+        
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = model.generate_content(
+            prompt,
+            generation_config=genai.types.GenerationConfig(
+                temperature=0.9,
+                max_output_tokens=150,
+                top_p=0.95
+            )
+        )
+        
+        if response and response.text:
+            lines = response.text.strip().split('\n')
+            questions = []
+            for line in lines:
+                line = line.strip().lstrip('0123456789.-*• ').strip()
+                if line and '?' in line and len(line) > 10:
+                    questions.append(line)
+            
+            if len(questions) >= 2:
+                logger.info(f"✅ Generated {len(questions)} AI questions")
+                return questions[:3]
+        
+    except Exception as e:
+        logger.warning(f"AI question generation failed: {e}")
+    
+    return get_fallback_questions(user_query)
+
+def get_fallback_questions(user_query: str) -> list:
+    """Generate contextual fallback questions based on user query"""
+    query_lower = user_query.lower()
+    
+    # Extract key topics from query
+    if any(word in query_lower for word in ['register', 'registration', 'how to register']):
+        return [
+            "What documents are needed for EPR registration?",
+            "How long does EPR registration take?",
+            "Who can help me with EPR registration?"
+        ]
+    elif any(word in query_lower for word in ['penalty', 'fine', 'non-compliance', 'violation']):
+        return [
+            "What are EPR non-compliance penalties?",
+            "How can I avoid EPR fines?",
+            "How do I resolve penalty notices?"
+        ]
+    elif any(word in query_lower for word in ['certificate', 'credit', 'epr certificate']):
+        return [
+            "Where can I buy EPR certificates?",
+            "What is the validity of EPR certificates?",
+            "What is the cost of EPR certificates?"
+        ]
+    elif any(word in query_lower for word in ['target', 'obligation', 'fulfill', 'achieve']):
+        return [
+            "How to calculate my EPR target?",
+            "Who will help me fulfill my EPR target?",
+            "What happens if I don't meet EPR targets?"
+        ]
+    elif any(word in query_lower for word in ['deadline', 'timeline', 'when', 'date']):
+        return [
+            "What are the key EPR deadlines?",
+            "When is the EPR annual return due?",
+            "How often do I need to report under EPR?"
+        ]
+    elif any(word in query_lower for word in ['cost', 'price', 'fee', 'expensive']):
+        return [
+            "How much does EPR compliance cost?",
+            "What are the EPR registration fees?",
+            "How can I reduce EPR compliance costs?"
+        ]
+    elif any(word in query_lower for word in ['recircle', 'help', 'service provider', 'pro']):
+        return [
+            "What services does ReCircle offer?",
+            "How can ReCircle help with EPR compliance?",
+            "Can ReCircle manage my entire EPR process?"
+        ]
+    elif any(word in query_lower for word in ['document', 'paperwork', 'proof']):
+        return [
+            "What documents do I need for EPR registration?",
+            "What proof is required for EPR compliance?",
+            "How long should I keep EPR records?"
+        ]
+    else:
+        # Generic relevant questions
+        return [
+            "What is EPR and who needs to comply?",
+            "How do I get started with EPR compliance?",
+            "Who can help me with EPR compliance?"
+        ]
+
+def find_best_answer(user_query: str, intent_result=None) -> dict:
     logger.info(f"🔍 Searching for query: {user_query[:100]}...")
     
     collections = get_collections()
@@ -221,7 +338,7 @@ def find_best_answer(user_query: str) -> dict:
         answer = recircle_info
     
     # Generate suggestions
-    suggestions = generate_related_questions(user_query, filtered_results)
+    suggestions = generate_related_questions(user_query, filtered_results, intent_result)
     
     return {
         "answer": answer,
