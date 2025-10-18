@@ -42,15 +42,15 @@ def get_recircle_info(query: str) -> str:
     query_lower = query.lower()
     
     if any(word in query_lower for word in ["contact", "details", "phone", "email", "reach"]):
-        return "ReCircle Contact Details:\n\n• Mumbai Office: 3rd Floor, APML Tower, Vishveshwar Nagar Rd, Yashodham, Goregaon, Mumbai, Maharashtra 400063\n• Phone: 9004240004\n• Email: info@recircle.in\n\nFor personalized EPR compliance assistance and expert consultation, contact us today!"
+        return "📍 Mumbai Office: 3rd Floor, APML Tower, Vishveshwar Nagar Rd, Yashodham, Goregaon, Mumbai, Maharashtra 400063\n\n📞 Phone: 9004240004\n📧 Email: info@recircle.in"
     elif any(word in query_lower for word in ["office", "location", "address", "mumbai", "where"]):
-        return "ReCircle Office Location:\n• Mumbai: 3rd Floor, APML Tower, Vishveshwar Nagar Rd, Yashodham, Goregaon, Mumbai, Maharashtra 400063\n• Phone: 9004240004\n• Email: info@recircle.in\n• For office visits or meetings, please call ahead to schedule an appointment."
+        return "📍 ReCircle Office: 3rd Floor, APML Tower, Vishveshwar Nagar Rd, Yashodham, Goregaon, Mumbai, Maharashtra 400063\n\nFor office visits or meetings, please call ahead: 9004240004"
     elif any(word in query_lower for word in ["cto", "chief technology officer", "technology head"]):
-        return "ReCircle's Chief Technology Officer (CTO) leads our technology initiatives in EPR compliance and waste management solutions. For technical partnerships or technology-related inquiries, contact us at info@recircle.in or 9004240004."
+        return "ReCircle's Chief Technology Officer leads our technology initiatives in EPR compliance and waste management solutions. For technical partnerships, reach out at info@recircle.in"
     elif any(word in query_lower for word in ["founder", "ceo", "leadership", "team"]):
-        return "ReCircle is led by experienced professionals in sustainability and waste management. Our leadership team drives innovation in EPR compliance and circular economy solutions. Contact info@recircle.in for leadership inquiries."
+        return "ReCircle is led by experienced professionals in sustainability and waste management. Our leadership team drives innovation in EPR compliance and circular economy solutions."
     elif any(word in query_lower for word in ["help", "assistance", "support"]) and "recircle" in query_lower:
-        return "ReCircle provides comprehensive EPR compliance and waste management support. Our team, including our CTO for technical matters, is ready to assist you. Contact us at info@recircle.in or 9004240004 for personalized assistance."
+        return "ReCircle provides comprehensive EPR compliance and waste management support. Our team is ready to assist you with personalized solutions."
     elif any(word in query_lower for word in ["company", "about", "recircle"]):
         return "ReCircle is India's leading Extended Producer Responsibility (EPR) compliance and plastic waste management company. We help businesses achieve plastic neutrality through comprehensive waste collection, recycling, and compliance solutions."
     else:
@@ -70,14 +70,14 @@ def generate_related_questions(user_query: str, search_results: list = None, int
         high_priority_intents = ['contact_intent', 'sales_opportunity', 'urgent_need', 'high_interest']
         is_high_priority = (intent_result.intent in high_priority_intents and intent_result.confidence >= 0.6) or intent_result.should_connect
     
-    # If help query or high priority, include ReCircle contact questions
+    # If help query or high priority, include ReCircle service questions (not contact)
     if is_help_query or is_high_priority:
         recircle_questions = [
             "How can ReCircle help me with EPR compliance?",
             "What services does ReCircle offer?",
-            "How do I contact ReCircle for assistance?",
             "What makes ReCircle different from other EPR service providers?",
-            "Can ReCircle handle my complete EPR compliance?"
+            "Can ReCircle handle my complete EPR compliance?",
+            "What is ReCircle's process for EPR registration?"
         ]
         # Mix ReCircle questions with relevant ones
         try:
@@ -331,9 +331,12 @@ def find_best_answer(user_query: str, intent_result=None) -> dict:
     
     answer = combined_text if combined_text else filtered_results[0]['document']
     
-    # Check for ReCircle-specific queries only
+    # Check for ReCircle-specific queries
     query_lower = user_query.lower()
-    if any(word in query_lower for word in ["recircle", "contact details", "contact"]):
+    is_recircle_query = "recircle" in query_lower or "re-circle" in query_lower or "re circle" in query_lower
+    is_contact_query = any(word in query_lower for word in ["contact", "phone", "email", "reach", "address", "location", "office", "where", "mumbai"])
+    
+    if is_recircle_query and is_contact_query:
         recircle_info = get_recircle_info(user_query)
         answer = recircle_info
     

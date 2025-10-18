@@ -11,14 +11,14 @@ from lead_qualification import lead_qualification
 class LeadManager:
     def __init__(self):
         self.lead_scores = {
-            'sales_opportunity': 9,
-            'contact_intent': 10,
-            'company_inquiry': 8,
-            'high_interest': 8,
-            'urgent_need': 10,
-            'service_specific': 7,
-            'business_inquiry': 8,
-            'general_inquiry': 3
+            'sales_opportunity': 25,
+            'contact_intent': 30,
+            'company_inquiry': 20,
+            'high_interest': 20,
+            'urgent_need': 30,
+            'service_specific': 18,
+            'business_inquiry': 20,
+            'general_inquiry': 5
         }
 
         # Lead priority thresholds
@@ -77,11 +77,12 @@ class LeadManager:
             })
             lead_data['intents'] = json.dumps(intents_list[-10:])
 
-            # Calculate new lead score
+            # Calculate and accumulate lead score (max 100)
             intent_score = self.lead_scores.get(intent_result.intent, 0)
             confidence_multiplier = intent_result.confidence
-            calculated_score = intent_score * confidence_multiplier
-            lead_data['lead_score'] = max(1, int(calculated_score))
+            calculated_score = int(intent_score * confidence_multiplier)
+            current_score = lead_data['lead_score']
+            lead_data['lead_score'] = min(100, current_score + calculated_score)
 
             # Track high-interest queries
             if intent_result.intent in ['sales_opportunity', 'contact_intent', 'high_interest',

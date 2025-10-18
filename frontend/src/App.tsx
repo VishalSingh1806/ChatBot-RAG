@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Send, Bot, User } from 'lucide-react';
-import customLogo from './assets/logo.png'; // Adjust the path to your PNG logo
+import customLogo from './assets/ReCircle Logo Identity_RGB-05.png';
 
 interface Message {
   id: string;
@@ -31,7 +31,15 @@ function App() {
   const [isTyping, setIsTyping] = useState(false);
   const [sessionInitialized, setSessionInitialized] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [showWelcomePopup, setShowWelcomePopup] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowWelcomePopup(false);
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -339,14 +347,53 @@ function App() {
 
   return (
     <div className="min-h-screen bg-black relative overflow-hidden">
+      <style>{`
+        @keyframes pulse-glow {
+          0%, 100% {
+            opacity: 1;
+            transform: scale(1);
+            box-shadow: 0 0 20px 5px rgba(24, 64, 64, 0.8), 0 0 40px 10px rgba(16, 185, 129, 0.4);
+          }
+          50% {
+            opacity: 0.7;
+            transform: scale(1.15);
+            box-shadow: 0 0 40px 15px rgba(24, 64, 64, 0.4), 0 0 60px 20px rgba(16, 185, 129, 0.2);
+          }
+        }
+        .pulse-animation {
+          animation: pulse-glow 1.5s ease-in-out infinite;
+        }
+      `}</style>
+      {/* Welcome Popup */}
+      {showWelcomePopup && !isOpen && (
+        <div className="fixed bottom-24 right-5 z-40 animate-in slide-in-from-right-5 duration-500">
+          <div className="rounded-xl shadow-2xl p-3 relative" style={{ 
+            maxWidth: '240px',
+            background: 'linear-gradient(135deg, #184040 0%, #10B981 100%)',
+            boxShadow: '0 10px 40px rgba(24, 64, 64, 0.3)'
+          }}>
+            <button
+              onClick={() => setShowWelcomePopup(false)}
+              className="absolute top-1 right-1 text-white hover:text-gray-200 w-5 h-5 flex items-center justify-center rounded-full hover:bg-white/20 transition-all text-sm"
+            >
+              ✕
+            </button>
+            <div className="pr-4">
+              <p className="text-white font-bold text-sm mb-1">👋 Hi there!</p>
+              <p className="text-white/90 text-xs leading-snug">Need help with EPR? ReCircle is here to help you!</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Chat Widget */}
       <div className="fixed bottom-5 right-5 z-50">
         {/* Chat Button */}
         {!isOpen && (
           <button
             onClick={() => setIsOpen(true)}
-            className="w-15 h-15 bg-teal-800 rounded-lg shadow-2xl hover:shadow-teal-500/25 transition-all duration-300 hover:scale-110 flex items-center justify-center"
-            style={{ width: '60px', height: '60px', backgroundColor: 'rgba(24, 64, 64, 1)' }}
+            className="w-15 h-15 rounded-lg shadow-2xl hover:shadow-teal-500/25 transition-all duration-300 hover:scale-110 flex items-center justify-center pulse-animation"
+            style={{ width: '60px', height: '60px', backgroundColor: '#184040' }}
           >
             <img src={customLogo} alt="Chat Bot Logo" className="w-15 h-10 object-contain" />
           </button>
@@ -358,7 +405,7 @@ function App() {
                style={{ width: '340px', height: '500px' }}>
             {/* Header */}
             <div className="p-3 flex items-center justify-between"
-                 style={{ backgroundColor: 'rgba(24, 64, 64, 1)', color: 'white' }}>
+                 style={{ backgroundColor: '#184040', color: 'white' }}>
               <div className="flex items-center gap-3">
                 <div className="relative">
                   <div className="w-13 h-13 rounded-full flex items-center justify-center">
@@ -416,7 +463,7 @@ function App() {
               {showForm && sessionInitialized && (
                 <div className="flex justify-center mb-4">
                   <div className="bg-gray-50 border border-gray-300 rounded-lg p-5 shadow-lg max-w-xs w-full">
-                    <h3 className="text-center text-lg font-semibold mb-3 text-teal-800">Let's get to know you!</h3>
+                    <h3 className="text-center text-lg font-semibold mb-3" style={{ color: '#184040' }}>Let's get to know you!</h3>
                     <form className="space-y-4">
                       <div>
                         <label className="block text-sm text-gray-700 mb-1">Name</label>
@@ -474,7 +521,8 @@ function App() {
                         type="button"
                         onClick={handleFormSubmit}
                         disabled={!isFormValid() || !sessionInitialized}
-                        className="w-full py-2 px-4 bg-teal-800 text-white rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-teal-700 transition-colors"
+                        className="w-full py-2 px-4 text-white rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        style={{ backgroundColor: '#184040' }}
                       >
                         {sessionInitialized ? 'Submit' : 'Connecting...'}
                       </button>
@@ -487,7 +535,7 @@ function App() {
               {messages.map((msg) => (
                 <div key={msg.id} className={`flex mb-3 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <div className={`flex items-end gap-2 max-w-xs ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                    <div className="w-9 h-9 rounded-full bg-teal-800 flex items-center justify-center flex-shrink-0">
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#184040' }}>
                       {msg.sender === 'user' ? (
                         <User className="w-5 h-5 text-white" />
                       ) : (
@@ -509,7 +557,7 @@ function App() {
               {isTyping && (
                 <div className="flex mb-3 justify-start">
                   <div className="flex items-end gap-2 max-w-xs flex-row">
-                    <div className="w-9 h-9 rounded-full bg-teal-800 flex items-center justify-center flex-shrink-0">
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#184040' }}>
                       <Bot className="w-5 h-5 text-white" />
                     </div>
                     <div className="px-4 py-3 rounded-2xl shadow-sm bg-white text-gray-800">
@@ -532,7 +580,8 @@ function App() {
                       <button
                         key={index}
                         onClick={() => handleSuggestionClick(question)}
-                        className="block w-full text-left px-3 py-2 text-sm text-teal-800 border-2 border-teal-800 rounded-full hover:bg-teal-800 hover:text-white transition-colors duration-200"
+                        className="block w-full text-left px-3 py-2 text-sm rounded-full transition-colors duration-200"
+                        style={{ color: '#184040', borderWidth: '2px', borderColor: '#184040' }}
                       >
                         {question}
                       </button>
@@ -570,7 +619,7 @@ function App() {
                   disabled={!message.trim() || !isFormSubmitted || !sessionInitialized}
                   className="absolute right-3 top-1/2 transform -translate-y-1/2 w-8 h-8 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Send className={`w-5 h-5 ${message.trim() && isFormSubmitted && sessionInitialized ? 'text-teal-800' : 'text-gray-400'}`} />
+                  <Send className="w-5 h-5" style={{ color: message.trim() && isFormSubmitted && sessionInitialized ? '#184040' : '#9CA3AF' }} />
                 </button>
               </div>
               <div className="text-xs text-gray-500 mt-1 ml-4">
