@@ -1,10 +1,12 @@
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
+from contextlib import asynccontextmanager
 import logging
 import os
 import uuid
 import asyncio
+from datetime import datetime
 from models import QueryRequest, QueryResponse, UserData
 from search import find_best_answer
 from llm_refiner import refine_with_gemini
@@ -18,7 +20,15 @@ from session_monitor import start_monitor
 # --------------------------------------------------------
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logging.info("🚀 Starting EPR ChatBot API")
+    asyncio.create_task(start_monitor())
+    logging.info("✅ Background session monitor started")
+    yield
+    logging.info("🛑 Shutting down EPR ChatBot API")
+
+app = FastAPI(lifespan=lifespan)
 SECRET_KEY = os.getenv("SECRET_KEY", "a_default_secret_key_for_development_only")
 IS_PRODUCTION = os.getenv("APP_ENV") == "production"
 
@@ -55,15 +65,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# --------------------------------------------------------
-# Startup event - Start background monitor
-# --------------------------------------------------------
-@app.on_event("startup")
-async def startup_event():
-    logging.info("🚀 Starting EPR ChatBot API")
-    asyncio.create_task(start_monitor())
-    logging.info("✅ Background session monitor started")
 
 # --------------------------------------------------------
 # Routes
@@ -126,9 +127,15 @@ async def handle_query(request: Request, query: QueryRequest):
             chat_key = f"session:{session_id}:chat"
             redis_client.rpush(chat_key, f"User: {query.text}")
             redis_client.rpush(chat_key, f"Bot: {final_answer}")
-            redis_client.expire(chat_key, 86400)  # keep chat 1 day
+            redis_client.expire(chat_key, 86400)
             chat_count = redis_client.llen(chat_key)
             logging.info(f"💬 Saved chat to Redis. Total messages: {chat_count}")
+            
+            # ✅ FIX: Update session last_interaction timestamp
+            session_key = f"session:{session_id}"
+            if redis_client.exists(session_key):
+                redis_client.hset(session_key, "last_interaction", datetime.utcnow().isoformat())
+                logging.info(f"⏰ Updated last_interaction for session {session_id}")
         except Exception as chat_err:
             logging.error(f"❌ Could not save chat logs: {chat_err}", exc_info=True)
 
