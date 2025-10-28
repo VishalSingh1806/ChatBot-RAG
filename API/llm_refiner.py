@@ -107,8 +107,9 @@ def refine_with_gemini(
         f'10. For contact: {phone_number} or {email}\n'
         '11. For medium/high priority leads OR help queries: Replace generic answers with ReCircle-focused solutions\n'
         '12. Do NOT add contact info in the main answer - it will be added separately\n'
-        '13. For company queries (about ReCircle): Do NOT add any contact promotion\n'
-        '14. Focus only on EPR and plastic waste topics\n'
+        '13. ANSWER ALL ReCircle service questions: Explain ReCircle offers end-to-end EPR compliance including registration, certificates, waste management, and reporting\n'
+        '14. For "what makes ReCircle different": Highlight comprehensive service, technology platform, pan-India network, compliance expertise\n'
+        '15. ReCircle questions are ALWAYS relevant - answer them fully and positively\n'
         f'{context_instructions}'
     )
 #     prompt_text = (
@@ -208,8 +209,8 @@ def refine_with_gemini(
     #     cto_info = "\n\n🔧 **Technical Support**: For advanced technical queries or partnerships, you can reach out to our CTO who leads our technology initiatives in EPR compliance and waste management solutions."
     #     refined_answer += cto_info
     
-    # Modify response if connection should be suggested (exclude company queries)
-    is_company_query = any(word in query.lower() for word in ['what is recircle', 'about recircle', 'recircle company', 'recircle different'])
+    # Modify response if connection should be suggested (only exclude basic info queries)
+    is_company_query = any(word in query.lower() for word in ['what is recircle', 'about recircle', 'recircle company']) and not any(word in query.lower() for word in ['service', 'help', 'different', 'offer'])
     
     if intent_result.should_connect and not is_company_query:
         connection_message = intent_detector.get_connection_message(intent_result.intent, user_name)

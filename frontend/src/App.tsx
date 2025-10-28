@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Send, Bot, User } from 'lucide-react';
+import { X, Send, Bot, User, Download } from 'lucide-react';
 import customLogo from './assets/ReCircle Logo Identity_RGB-05.png';
 
 interface Message {
@@ -345,6 +345,102 @@ function App() {
     await submitQuery(question);
   };
 
+  const downloadChat = async () => {
+    if (messages.length === 0) return;
+    
+    const { jsPDF } = await import('jspdf');
+    const doc = new jsPDF();
+    
+    // Simple header
+    doc.setFontSize(16);
+    doc.setFont(undefined, 'bold');
+    doc.text('Chat Conversation', 20, 20);
+    doc.setFontSize(10);
+    doc.setFont(undefined, 'normal');
+    doc.text(`Generated on: ${new Date().toLocaleString()}`, 20, 28);
+    doc.line(20, 32, 190, 32);
+    
+    let yPosition = 40;
+    
+    messages.forEach((msg) => {
+      const sender = msg.sender === 'user' ? 'User:' : 'Robot:';
+      const cleanText = msg.text
+        .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+        .replace(/&#39;/g, "'").replace(/&quot;/g, '"')
+        .replace(/\*\*/g, '')
+        .replace(/\* /g, '• ')  // Convert '* ' to bullet
+        .replace(/^\*/gm, '•')  // Convert line-starting '*' to bullet
+        .replace(/---/g, '').replace(/Ø/g, '').replace(/ß/g, '')
+        .replace(/[^\x20-\x7E\n•]/g, '').replace(/\n\s*\n/g, '\n').trim();
+      
+      // Check if content fits on page
+      const textLines = doc.splitTextToSize(cleanText, 165);
+      const neededHeight = 10 + textLines.length * 5;
+      
+      if (yPosition + neededHeight > 280) {
+        doc.addPage();
+        yPosition = 20;
+      }
+      
+      // Add sender label
+      doc.setFont(undefined, 'bold');
+      doc.setFontSize(11);
+      doc.text(sender, 20, yPosition);
+      yPosition += 8;
+      
+      // Add message content with professional formatting
+      doc.setFont(undefined, 'normal');
+      doc.setFontSize(10);
+      textLines.forEach(line => {
+        if (line.trim() === '') {
+          yPosition += 3;
+          return;
+        }
+        
+        if (line.startsWith('• ') || line.startsWith('•')) {
+          // Bullet point with proper indentation
+          doc.text('•', 25, yPosition);
+          const bulletText = line.replace(/^•\s*/, '').trim();
+          const wrappedBulletText = doc.splitTextToSize(bulletText, 155);
+          wrappedBulletText.forEach((wrappedLine, index) => {
+            doc.text(wrappedLine, 30, yPosition + (index * 5));
+          });
+          yPosition += (wrappedBulletText.length - 1) * 5;
+        } else if (line.trim().length > 0 && !line.includes(':') && yPosition > 48) {
+          // Treat as bullet point if it's a short line that looks like a list item
+          const prevLine = textLines[textLines.indexOf(line) - 1];
+          if (prevLine && (prevLine.includes(':') || prevLine.startsWith('•'))) {
+            doc.text('•', 25, yPosition);
+            const wrappedBulletText = doc.splitTextToSize(line.trim(), 155);
+            wrappedBulletText.forEach((wrappedLine, index) => {
+              doc.text(wrappedLine, 30, yPosition + (index * 5));
+            });
+            yPosition += (wrappedBulletText.length - 1) * 5;
+          } else {
+            doc.text(line, 20, yPosition);
+          }
+        } else {
+          // Regular text
+          doc.text(line, 20, yPosition);
+        }
+        yPosition += 5;
+      });
+      yPosition += 8;
+    });
+    
+    // Footer
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(128, 128, 128);
+      doc.text(`Page ${i} of ${pageCount}`, 180, 290);
+    }
+    
+    const userName = formData.name ? formData.name.replace(/[^a-zA-Z0-9]/g, '_') : 'User';
+    doc.save(`${userName}_Chat_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
   return (
     <div className="min-h-screen bg-black relative overflow-hidden">
       <style>{`
@@ -422,12 +518,22 @@ function App() {
                   </p>
                 </div>
               </div>
-              <button
-                onClick={() => setIsOpen(false)}
-                className="text-white hover:opacity-70 transition-opacity duration-200 text-lg font-bold"
-              >
-                ✖
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={downloadChat}
+                  disabled={messages.length === 0}
+                  className="text-white hover:opacity-70 transition-opacity duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                  title="Download Chat"
+                >
+                  <Download className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => setIsOpen(false)}
+                  className="text-white hover:opacity-70 transition-opacity duration-200 text-lg font-bold"
+                >
+                  ✖
+                </button>
+              </div>
             </div>
 
             {/* Messages */}
@@ -622,8 +728,11 @@ function App() {
                   <Send className="w-5 h-5" style={{ color: message.trim() && isFormSubmitted && sessionInitialized ? '#184040' : '#9CA3AF' }} />
                 </button>
               </div>
-              <div className="text-xs text-gray-500 mt-1 ml-4">
+              {/* <div className="text-xs text-gray-500 mt-1 ml-4">
                 {message.length}/100
+              </div> */}
+              <div className="text-xs text-gray-400 mt-1 ml-4">
+                Rebot can make mistakes, Please refer to CPCB portal for more info
               </div>
             </div>
           </div>

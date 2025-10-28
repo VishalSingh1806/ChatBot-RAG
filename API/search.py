@@ -3,7 +3,7 @@ import google.generativeai as genai
 import os
 import logging
 from dotenv import load_dotenv
-from config import CHROMA_DB_PATH, COLLECTIONS
+from config import CHROMA_DB_PATH, CHROMA_DB_PATH_LANGFLOW, COLLECTIONS, COLLECTIONS_LANGFLOW
 
 # Load environment variables
 load_dotenv()
@@ -17,20 +17,37 @@ credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
 if credentials_path:
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = credentials_path
 
-# Initialize ChromaDB client
+# Initialize ChromaDB clients
 client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
+client_langflow = chromadb.PersistentClient(path=CHROMA_DB_PATH_LANGFLOW)
 
 # Configure Gemini - same as Langflow
 genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
 
 def get_collections():
-    """Get all available collections"""
+    """Get all available collections from both ChromaDB databases"""
     collections = {}
+    
+    # Get collections from primary database
     for collection_name in COLLECTIONS:
         try:
             collections[collection_name] = client.get_collection(name=collection_name)
+            logger.info(f"✅ Loaded collection '{collection_name}' from primary DB")
         except Exception as e:
-            logger.warning(f"Collection '{collection_name}' not found: {e}")
+            logger.warning(f"Collection '{collection_name}' not found in primary DB: {e}")
+    
+    # Get collections from Langflow database
+    try:
+        langflow_collections = client_langflow.list_collections()
+        for collection in langflow_collections:
+            collection_name = collection.name
+            try:
+                collections[f"langflow_{collection_name}"] = client_langflow.get_collection(name=collection_name)
+                logger.info(f"✅ Loaded collection '{collection_name}' from Langflow DB")
+            except Exception as e:
+                logger.warning(f"Could not load Langflow collection '{collection_name}': {e}")
+    except Exception as e:
+        logger.warning(f"Could not access Langflow database: {e}")
     
     if not collections:
         logger.error("No collections found. Run gemini_pdf_processor.py first.")
@@ -41,24 +58,74 @@ def get_recircle_info(query: str) -> str:
     """Get ReCircle company information based on query"""
     query_lower = query.lower()
     
-    if any(word in query_lower for word in ["contact", "details", "phone", "email", "reach"]):
+    # Service-related queries
+    if any(word in query_lower for word in ["services", "offer", "provide", "what does recircle", "what can recircle"]):
+        return """ReCircle offers comprehensive EPR and sustainability services:
+
+• EPR Registration & Compliance Management
+• Plastic Waste Collection & Processing
+• Recycling Partnerships & Certification
+• Plastic Neutrality Programs
+• Sustainability Consulting
+• Compliance Reporting & Documentation
+• Circular Economy Solutions
+
+We help businesses transform their waste management approach while meeting all regulatory requirements."""
+    
+    # Differentiation queries
+    elif any(word in query_lower for word in ["different", "better", "why recircle", "advantage", "unique"]):
+        return """ReCircle stands out as India's leading EPR compliance partner through:
+
+• End-to-end EPR compliance solutions (registration to reporting)
+• Pan-India waste collection and recycling network
+• Technology-driven compliance tracking platform
+• Expert team with deep regulatory knowledge
+• Proven track record with 500+ businesses
+• Transparent pricing and process
+• Dedicated account management
+• Real-time compliance monitoring
+
+We don't just help you comply - we help you build sustainable, circular business practices."""
+    
+    # Contact queries
+    elif any(word in query_lower for word in ["contact", "details", "phone", "email", "reach"]):
         return "📍 Mumbai Office: 3rd Floor, APML Tower, Vishveshwar Nagar Rd, Yashodham, Goregaon, Mumbai, Maharashtra 400063\n\n📞 Phone: 9004240004\n📧 Email: info@recircle.in"
+    
+    # Location queries
     elif any(word in query_lower for word in ["office", "location", "address", "mumbai", "where"]):
         return "📍 ReCircle Office: 3rd Floor, APML Tower, Vishveshwar Nagar Rd, Yashodham, Goregaon, Mumbai, Maharashtra 400063\n\nFor office visits or meetings, please call ahead: 9004240004"
-    elif any(word in query_lower for word in ["cto", "chief technology officer", "technology head"]):
-        return "ReCircle's Chief Technology Officer leads our technology initiatives in EPR compliance and waste management solutions. For technical partnerships, reach out at info@recircle.in"
-    elif any(word in query_lower for word in ["founder", "ceo", "leadership", "team"]):
-        return "ReCircle is led by experienced professionals in sustainability and waste management. Our leadership team drives innovation in EPR compliance and circular economy solutions."
+    
+    # Help/assistance queries
     elif any(word in query_lower for word in ["help", "assistance", "support"]) and "recircle" in query_lower:
-        return "ReCircle provides comprehensive EPR compliance and waste management support. Our team is ready to assist you with personalized solutions."
-    elif any(word in query_lower for word in ["company", "about", "recircle"]):
-        return "ReCircle is India's leading Extended Producer Responsibility (EPR) compliance and plastic waste management company. We help businesses achieve plastic neutrality through comprehensive waste collection, recycling, and compliance solutions."
+        return """ReCircle provides comprehensive EPR compliance and waste management support:
+
+• Complete EPR registration and regulatory compliance
+• Plastic waste collection and recycling networks
+• Plastic neutrality and carbon offset programs
+• Compliance reporting and documentation
+• Sustainable packaging consulting
+• Circular economy implementation
+
+Our team is ready to assist you with personalized solutions tailored to your business needs."""
+    
+    # General company queries
+    elif any(word in query_lower for word in ["company", "about", "what is recircle", "tell me about"]):
+        return """ReCircle is India's leading Extended Producer Responsibility (EPR) compliance and plastic waste management company. We help businesses achieve plastic neutrality through comprehensive waste collection, recycling, and compliance solutions.
+
+Our services include EPR registration, compliance management, plastic credit programs, and sustainable packaging solutions. We partner with businesses to create circular economy solutions, helping them meet regulatory requirements while reducing their environmental impact."""
+    
     else:
         return "ReCircle specializes in EPR compliance, plastic waste management, and sustainability solutions for businesses across India."
 
-def generate_related_questions(user_query: str, search_results: list = None, intent_result=None) -> list:
+# Track previously suggested questions per session
+_suggested_questions_cache = {}
+
+def generate_related_questions(user_query: str, search_results: list = None, intent_result=None, session_id: str = None) -> list:
     """Generate dynamic contextually relevant questions using AI"""
     query_lower = user_query.lower()
+    
+    # Get previously suggested questions for this session
+    previous_questions = _suggested_questions_cache.get(session_id, set()) if session_id else set()
     
     # Check if user is asking for help/assistance or has high priority intent
     help_keywords = ['help', 'assist', 'support', 'guidance', 'who will help', 'can you help', 'need help']
@@ -79,57 +146,89 @@ def generate_related_questions(user_query: str, search_results: list = None, int
             "Can ReCircle handle my complete EPR compliance?",
             "What is ReCircle's process for EPR registration?"
         ]
+        # Filter out previously suggested questions
+        recircle_questions = [q for q in recircle_questions if q not in previous_questions]
+        
         # Mix ReCircle questions with relevant ones
         try:
             context_text = ""
             if search_results:
                 for result in search_results[:2]:
-                    context_text += result.get('document', '')[:150] + " "
+                    context_text += result.get('document', '')[:200] + " "
+            
+            avoid_list = "\n".join(list(previous_questions)[:5]) if previous_questions else "None"
             
             prompt = f"""User asked: "{user_query}"
 
-Generate 1 specific follow-up question about: {user_query}
+Context: {context_text[:300]}
+
+Previously suggested (DO NOT repeat):
+{avoid_list}
+
+Generate 1 unique, specific follow-up question that:
+- Is directly related to their query
+- Explores a different aspect than the original question
+- Is practical and actionable
+- MUST be different from previously suggested questions
+
 Format: Return ONLY the question, ending with '?'. No numbering."""
             
             model = genai.GenerativeModel('gemini-1.5-flash')
-            response = model.generate_content(prompt, generation_config=genai.types.GenerationConfig(temperature=0.9, max_output_tokens=100))
+            response = model.generate_content(prompt, generation_config=genai.types.GenerationConfig(temperature=1.0, max_output_tokens=80))
             
             if response and response.text:
                 lines = [line.strip().lstrip('0123456789.-*• ').strip() for line in response.text.strip().split('\n')]
-                ai_questions = [line for line in lines if line and '?' in line and len(line) > 10][:1]
-                # Combine: 1 AI question + 2 ReCircle questions = 3 total
-                return ai_questions + recircle_questions[:2]
+                ai_questions = [line for line in lines if line and '?' in line and len(line) > 10 and line not in previous_questions][:1]
+                result_questions = ai_questions + recircle_questions[:2]
+                result_questions = result_questions[:3]  # Limit to 3
+                
+                # Cache the suggestions
+                if session_id:
+                    _suggested_questions_cache[session_id] = previous_questions.union(set(result_questions))
+                
+                return result_questions
         except Exception as e:
             logger.warning(f"AI question generation failed: {e}")
         
         # Fallback: return ReCircle questions
-        return recircle_questions[:3]
+        result = recircle_questions[:3]
+        if session_id:
+            _suggested_questions_cache[session_id] = previous_questions.union(set(result))
+        return result
     
     # Regular AI-generated questions for other queries
     try:
         context_text = ""
         if search_results:
             for result in search_results[:3]:
-                context_text += result.get('document', '')[:200] + " "
+                context_text += result.get('document', '')[:250] + " "
+        
+        # Add previously asked questions to prompt to avoid repetition
+        avoid_list = "\n".join(list(previous_questions)[:10]) if previous_questions else "None"
         
         prompt = f"""User asked: "{user_query}"
 
 Context from EPR knowledge base:
-{context_text[:500]}
+{context_text[:600]}
 
-Generate exactly 3 highly relevant follow-up questions that:
-1. Directly relate to the user's query topic
-2. Help them understand next steps or related aspects
-3. Are practical and actionable
+Previously suggested questions (DO NOT repeat these):
+{avoid_list}
 
-Format: Return ONLY the questions, one per line, each ending with '?'. No numbering, bullets, or explanations."""
+Generate exactly 3 unique, highly relevant follow-up questions that:
+1. Are DIRECTLY related to "{user_query}" topic
+2. Explore different aspects (next steps, requirements, process details)
+3. Are specific and actionable (avoid generic questions)
+4. Each question should be distinct and non-repetitive
+5. MUST be completely different from previously suggested questions
+
+Format: Return ONLY 3 questions, one per line, each ending with '?'. No numbering, bullets, or explanations."""
         
         model = genai.GenerativeModel('gemini-1.5-flash')
         response = model.generate_content(
             prompt,
             generation_config=genai.types.GenerationConfig(
-                temperature=0.9,
-                max_output_tokens=150,
+                temperature=1.0,
+                max_output_tokens=200,
                 top_p=0.95
             )
         )
@@ -139,12 +238,18 @@ Format: Return ONLY the questions, one per line, each ending with '?'. No number
             questions = []
             for line in lines:
                 line = line.strip().lstrip('0123456789.-*• ').strip()
-                if line and '?' in line and len(line) > 10:
+                if line and '?' in line and len(line) > 10 and line not in previous_questions:
                     questions.append(line)
             
             if len(questions) >= 2:
-                logger.info(f"✅ Generated {len(questions)} AI questions")
-                return questions[:3]
+                logger.info(f"✅ Generated {len(questions)} unique AI questions")
+                result_questions = questions[:3]
+                
+                # Cache the suggestions
+                if session_id:
+                    _suggested_questions_cache[session_id] = previous_questions.union(set(result_questions))
+                
+                return result_questions
         
     except Exception as e:
         logger.warning(f"AI question generation failed: {e}")
@@ -334,14 +439,19 @@ def find_best_answer(user_query: str, intent_result=None) -> dict:
     # Check for ReCircle-specific queries
     query_lower = user_query.lower()
     is_recircle_query = "recircle" in query_lower or "re-circle" in query_lower or "re circle" in query_lower
-    is_contact_query = any(word in query_lower for word in ["contact", "phone", "email", "reach", "address", "location", "office", "where", "mumbai"])
     
-    if is_recircle_query and is_contact_query:
+    # Handle all ReCircle queries (services, differentiation, contact, etc.)
+    if is_recircle_query:
         recircle_info = get_recircle_info(user_query)
-        answer = recircle_info
+        # Combine with RAG answer if available and relevant
+        if answer and len(answer) > 50:
+            answer = f"{recircle_info}\n\n{answer}"
+        else:
+            answer = recircle_info
     
-    # Generate suggestions
-    suggestions = generate_related_questions(user_query, filtered_results, intent_result)
+    # Generate suggestions (pass session_id if available from intent_result)
+    session_id = getattr(intent_result, 'session_id', None) if intent_result else None
+    suggestions = generate_related_questions(user_query, filtered_results, intent_result, session_id)
     
     return {
         "answer": answer,
