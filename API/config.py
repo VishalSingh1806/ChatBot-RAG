@@ -4,7 +4,7 @@ Configuration file for ChromaDB path and other settings
 import os
 
 # ChromaDB Configuration
-CHROMA_DB_PATH = r"C:\Users\BHAKTI\OneDrive\Desktop\ReCircle\EPR ChatBot\chromaDB"
+CHROMA_DB_PATH = r"D:\AI-ChatBot\API\chroma_db\db"
 
 # Collection names
 COLLECTIONS = ["EPR-chatbot"]

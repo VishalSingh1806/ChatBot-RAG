@@ -216,3 +216,7 @@ async def end_chat_session(request: Request):
     except Exception as e:
         logging.error(f"❌ Error finalizing session: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to finalize session")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
