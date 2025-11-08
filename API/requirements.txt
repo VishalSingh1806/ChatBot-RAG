@@ -10,7 +10,7 @@ scikit-learn
 torch
 itsdangerous
 starlette
-google-genai
+google-generativeai
 chromadb
 pypdf2
 pdfplumber

@@ -19,8 +19,11 @@ services:
     environment:
       # This tells the API to connect to the 'redis' service, not 'localhost'
       - REDIS_HOST=redis
+      - CHROMA_DB_PATH=/app/chroma_db
     ports:
       - "8000:8000"
+    volumes:
+      - chroma_data:/app/chroma_db
     depends_on:
       - redis
   frontend:
@@ -36,3 +39,4 @@ services:
 
 volumes:
   redis_data:
+  chroma_data:

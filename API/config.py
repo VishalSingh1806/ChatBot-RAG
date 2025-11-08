@@ -4,7 +4,8 @@ Configuration file for ChromaDB path and other settings
 import os
 
 # ChromaDB Configuration
-CHROMA_DB_PATH = r"D:\AI-ChatBot\API\chroma_db\db"
+# Use environment variable or default to /app/chroma_db for Docker
+CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", "/app/chroma_db")
 
 # Collection names
 COLLECTIONS = ["EPR-chatbot"]

@@ -3,7 +3,26 @@
     "allow": [
       "Bash(chmod +x deploy.sh)",
       "Bash(python:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(find:*)",
+      "Bash(cat:*)",
+      "Bash(tree:*)",
+      "Bash(mkdir:*)",
+      "Bash(gsutil -m rsync:*)",
+      "Read(//etc/epr-chatbot/keys/**)",
+      "Bash(gcloud auth:*)",
+      "Bash(sudo mkdir:*)",
+      "Bash(sudo gsutil:*)",
+      "Read(//var/lib/chatbot/chroma_db/**)",
+      "Bash(chmod:*)",
+      "Bash(sudo ./deploy.sh:*)",
+      "Bash(docker-compose logs:*)",
+      "Bash(docker logs:*)",
+      "Bash(docker stop:*)",
+      "Bash(docker rm:*)",
+      "Bash(docker rmi:*)",
+      "Bash(git add:*)",
+      "Bash(sudo docker build:*)"
     ],
     "deny": []
   }

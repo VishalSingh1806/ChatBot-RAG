@@ -61,6 +61,10 @@ sudo docker run -d \
 # ─── Step 4: Build & run backend ───────────────────────────────────────────────
 echo "📦 Building & launching chatbot-api..."
 cd "$(dirname "$0")/API"
+
+# Create ChromaDB directory if it doesn't exist
+sudo mkdir -p /var/lib/chatbot/chroma_db
+
 sudo docker build -t chatbot-api .
 sudo docker run -d \
   --name chatbot-api-container \
@@ -68,7 +72,9 @@ sudo docker run -d \
   --env-file .env \
   -e GOOGLE_APPLICATION_CREDENTIALS=/etc/keys/sa-key.json \
   -e REDIS_HOST=chatbot-redis \
+  -e CHROMA_DB_PATH=/app/chroma_db \
   -v /etc/epr-chatbot/keys/sa-key.json:/etc/keys/sa-key.json:ro \
+  -v /var/lib/chatbot/chroma_db:/app/chroma_db \
   -p 8000:8000 \
   chatbot-api
 

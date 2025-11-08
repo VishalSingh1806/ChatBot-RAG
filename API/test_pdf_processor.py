@@ -8,6 +8,7 @@ import os
 from gemini_pdf_processor import process_pdf_folder, setup_collections
 from sentence_transformers import SentenceTransformer
 import chromadb
+from config import CHROMA_DB_PATH
 
 
 def test_collections():
@@ -17,7 +18,7 @@ def test_collections():
     print("="*60)
 
     # Connect to ChromaDB
-    client = chromadb.PersistentClient(path="./chroma_db")
+    client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
     model = SentenceTransformer("all-MiniLM-L6-v2")
 
     collections = ["producer", "imports", "brand_owners", "general"]
