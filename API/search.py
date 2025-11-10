@@ -20,7 +20,7 @@ for db_path in CHROMA_DB_PATHS:
     clients[db_path] = chromadb.PersistentClient(path=db_path)
     logger.info(f"✅ Connected to ChromaDB at {db_path}")
 
-# Configure Gemini - same as Langflow
+# Configure Gemini
 genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
 
 def get_collections():
@@ -218,7 +218,7 @@ def find_best_answer(user_query: str, intent_result=None, previous_suggestions: 
             "source_info": {}
         }
     
-    # Generate query embedding using Gemini text-embedding-004 (same as Langflow)
+    # Generate query embedding using Gemini
     try:
         result = genai.embed_content(
             model="models/text-embedding-004",

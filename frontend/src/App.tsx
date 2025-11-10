@@ -619,8 +619,14 @@ function App() {
                           type="text"
                           placeholder="Enter your phone number"
                           value={formData.phone}
-                          onChange={(e) => handleFormChange('phone', e.target.value)}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/\D/g, '');
+                            if (value.length <= 10) {
+                              handleFormChange('phone', value);
+                            }
+                          }}
                           onBlur={() => validateField('phone', formData.phone)}
+                          maxLength={10}
                           className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-teal-600"
                         />
                         {formErrors.phone && <div className="text-red-500 text-xs mt-1">{formErrors.phone}</div>}

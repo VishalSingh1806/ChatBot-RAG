@@ -15,6 +15,7 @@ SMTP_SERVER = os.getenv("SMTP_SERVER")
 SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
 SMTP_USERNAME = os.getenv("SMTP_USERNAME")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
+INACTIVITY_THRESHOLD_MINUTES = int(os.getenv("INACTIVITY_THRESHOLD_MINUTES", 60))
 
 def send_thank_you_email(user_email: str, user_name: str):
     try:
@@ -87,13 +88,13 @@ async def monitor_inactivity():
                 last_time = datetime.fromisoformat(last_interaction)
                 time_diff = datetime.utcnow() - last_time
                 
-                if time_diff >= timedelta(minutes=3):
+                if time_diff >= timedelta(minutes=INACTIVITY_THRESHOLD_MINUTES):
                     user_email = (session_data.get(b"email") or session_data.get("email") or b"").decode() if isinstance(session_data.get(b"email") or session_data.get("email"), bytes) else session_data.get("email", "")
                     user_name = (session_data.get(b"user_name") or session_data.get("user_name") or b"").decode() if isinstance(session_data.get(b"user_name") or session_data.get("user_name"), bytes) else session_data.get("user_name", "User")
                     
                     # Send thank you email only once (check flag)
                     if user_email and not redis_client.exists(thankyou_key):
-                        logging.info(f"📧 Sending thank you email to {user_name} ({user_email}) after 3 min inactivity")
+                        logging.info(f"📧 Sending thank you email to {user_name} ({user_email}) after {INACTIVITY_THRESHOLD_MINUTES} min inactivity")
                         if send_thank_you_email(user_email, user_name):
                             redis_client.set(thankyou_key, "1", ex=86400)
                             logging.info(f"✅ Thank you email sent and flag set for session {session_id}")

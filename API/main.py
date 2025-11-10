@@ -38,13 +38,14 @@ IS_PRODUCTION = os.getenv("APP_ENV") == "production"
 # --------------------------------------------------------
 # Middleware setup
 # --------------------------------------------------------
+SESSION_EXPIRY_DAYS = int(os.getenv("SESSION_EXPIRY_DAYS", 30))
 app.add_middleware(
     SessionMiddleware,
     secret_key=SECRET_KEY,
     same_site="none" if IS_PRODUCTION else "lax",
     https_only=IS_PRODUCTION,
     session_cookie="session",
-    max_age=86400,
+    max_age=SESSION_EXPIRY_DAYS * 86400,
     path="/",
 )
 
@@ -150,7 +151,7 @@ async def handle_query(request: Request, query: QueryRequest):
             chat_key = f"session:{session_id}:chat"
             redis_client.rpush(chat_key, f"User: {query.text}")
             redis_client.rpush(chat_key, f"Bot: {final_answer}")
-            redis_client.expire(chat_key, 86400)
+            redis_client.expire(chat_key, SESSION_EXPIRY_DAYS * 86400)
             chat_count = redis_client.llen(chat_key)
             logging.info(f"💬 Saved chat to Redis. Total messages: {chat_count}")
             
@@ -191,7 +192,7 @@ async def handle_query(request: Request, query: QueryRequest):
             for suggestion in suggestions:
                 if suggestion != "Connect me to ReCircle":
                     redis_client.rpush(suggestions_key, suggestion)
-            redis_client.expire(suggestions_key, 86400)  # 24 hour expiry
+            redis_client.expire(suggestions_key, SESSION_EXPIRY_DAYS * 86400)
         
         return {
             "answer": final_answer,
@@ -224,7 +225,7 @@ async def handle_user_data(request: Request, user_data: UserData):
         
         # Mark this session for inactivity monitoring
         monitor_key = f"session:{session_id}:monitor_inactivity"
-        redis_client.set(monitor_key, datetime.utcnow().isoformat(), ex=86400)
+        redis_client.set(monitor_key, datetime.utcnow().isoformat(), ex=SESSION_EXPIRY_DAYS * 86400)
         
         # Also set initial last_interaction timestamp
         session_key = f"session:{session_id}"

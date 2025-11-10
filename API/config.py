@@ -10,8 +10,8 @@ load_dotenv()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # ChromaDB Configuration - Multiple databases (from .env or defaults)
-CHROMA_DB_PATH_1 = os.getenv("CHROMA_DB_PATH_1", os.path.join(BASE_DIR, "chroma_db"))
-CHROMA_DB_PATH_2 = os.getenv("CHROMA_DB_PATH_2", os.path.join(BASE_DIR, "chroma_db1"))
+CHROMA_DB_PATH_1 = os.getenv("CHROMA_DB_PATH_1", r"C:\Users\BHAKTI\OneDrive\Desktop\ReCircle\EPR ChatBot\chromaDB")
+CHROMA_DB_PATH_2 = os.getenv("CHROMA_DB_PATH_2", r"C:\Users\BHAKTI\OneDrive\Desktop\ReCircle\EPR ChatBot\chromaDB1")
 
 CHROMA_DB_PATHS = [CHROMA_DB_PATH_1, CHROMA_DB_PATH_2]
 
