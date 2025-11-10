@@ -2,8 +2,10 @@ import chromadb
 import google.generativeai as genai
 import os
 import logging
+import csv
+import random
 from dotenv import load_dotenv
-from config import CHROMA_DB_PATH, COLLECTIONS
+from config import CHROMA_DB_PATHS, COLLECTIONS
 
 # Load environment variables
 load_dotenv()
@@ -12,30 +14,31 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Set up Google Cloud credentials (only if available)
-credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-if credentials_path:
-    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = credentials_path
-
-# Initialize ChromaDB client
-client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
+# Initialize ChromaDB clients for all databases
+clients = {}
+for db_path in CHROMA_DB_PATHS:
+    clients[db_path] = chromadb.PersistentClient(path=db_path)
+    logger.info(f"✅ Connected to ChromaDB at {db_path}")
 
 # Configure Gemini - same as Langflow
 genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
 
 def get_collections():
-    """Get all available collections"""
-    collections = {}
-    for collection_name in COLLECTIONS:
-        try:
-            collections[collection_name] = client.get_collection(name=collection_name)
-        except Exception as e:
-            logger.warning(f"Collection '{collection_name}' not found: {e}")
+    """Get all available collections from all databases"""
+    all_collections = {}
+    for db_path, client in clients.items():
+        for collection_name in COLLECTIONS.get(db_path, []):
+            try:
+                collection = client.get_collection(name=collection_name)
+                all_collections[f"{collection_name}@{db_path}"] = collection
+                logger.info(f"✅ Found collection '{collection_name}' with {collection.count()} documents from {db_path}")
+            except Exception as e:
+                logger.warning(f"Collection '{collection_name}' not found in {db_path}: {e}")
     
-    if not collections:
-        logger.error("No collections found. Run gemini_pdf_processor.py first.")
+    if not all_collections:
+        logger.error("No collections found. ChromaDB databases may be empty.")
     
-    return collections
+    return all_collections
 
 def get_recircle_info(query: str) -> str:
     """Get ReCircle company information based on query"""
@@ -45,175 +48,166 @@ def get_recircle_info(query: str) -> str:
         return "📍 Mumbai Office: 3rd Floor, APML Tower, Vishveshwar Nagar Rd, Yashodham, Goregaon, Mumbai, Maharashtra 400063\n\n📞 Phone: 9004240004\n📧 Email: info@recircle.in"
     elif any(word in query_lower for word in ["office", "location", "address", "mumbai", "where"]):
         return "📍 ReCircle Office: 3rd Floor, APML Tower, Vishveshwar Nagar Rd, Yashodham, Goregaon, Mumbai, Maharashtra 400063\n\nFor office visits or meetings, please call ahead: 9004240004"
-    elif any(word in query_lower for word in ["cto", "chief technology officer", "technology head"]):
-        return "ReCircle's Chief Technology Officer leads our technology initiatives in EPR compliance and waste management solutions. For technical partnerships, reach out at info@recircle.in"
-    elif any(word in query_lower for word in ["founder", "ceo", "leadership", "team"]):
-        return "ReCircle is led by experienced professionals in sustainability and waste management. Our leadership team drives innovation in EPR compliance and circular economy solutions."
-    elif any(word in query_lower for word in ["help", "assistance", "support"]) and "recircle" in query_lower:
-        return "ReCircle provides comprehensive EPR compliance and waste management support. Our team is ready to assist you with personalized solutions."
-    elif any(word in query_lower for word in ["company", "about", "recircle"]):
-        return "ReCircle is India's leading Extended Producer Responsibility (EPR) compliance and plastic waste management company. We help businesses achieve plastic neutrality through comprehensive waste collection, recycling, and compliance solutions."
+    elif any(word in query_lower for word in ["participate", "join", "benefit", "work with", "partner"]):
+        return "ReCircle is India's leading EPR compliance and plastic waste management company. We help businesses achieve plastic neutrality through:\n\n• Complete EPR registration and compliance management\n• Plastic waste collection and recycling solutions\n• EPR certificate procurement\n• Annual return filing and documentation\n• Customized sustainability programs\n\nTo discuss how ReCircle can help your company, contact us at:\n📞 9004240004\n📧 info@recircle.in"
+    elif any(word in query_lower for word in ["service", "offer", "provide", "do"]):
+        return "ReCircle offers comprehensive EPR compliance solutions:\n\n• EPR Registration & Licensing\n• Plastic Waste Collection & Recycling\n• EPR Certificate Management\n• Annual Return Filing\n• Compliance Monitoring & Reporting\n• Sustainability Consulting\n\nWe help businesses meet their Extended Producer Responsibility obligations efficiently and cost-effectively.\n\nContact: 9004240004 | info@recircle.in"
+    elif any(word in query_lower for word in ["help", "assistance", "support"]):
+        return "Our ReCircle team is ready to provide personalized EPR solutions tailored to your business needs."
+    elif any(word in query_lower for word in ["what is", "who is", "about", "company"]):
+        return "ReCircle is India's leading Extended Producer Responsibility (EPR) compliance and plastic waste management company. We help businesses achieve plastic neutrality through comprehensive waste collection, recycling, and compliance solutions.\n\nOur services include EPR registration, certificate management, waste collection infrastructure, and complete compliance support.\n\nGet in touch: 📞 9004240004 | 📧 info@recircle.in"
     else:
-        return "ReCircle specializes in EPR compliance, plastic waste management, and sustainability solutions for businesses across India."
+        return "ReCircle specializes in EPR compliance, plastic waste management, and sustainability solutions for businesses across India.\n\nContact us: 9004240004 | info@recircle.in"
 
-def generate_related_questions(user_query: str, search_results: list = None, intent_result=None) -> list:
-    """Generate dynamic contextually relevant questions using AI"""
+def generate_related_questions(user_query: str, search_results: list = None, intent_result=None, previous_suggestions: list = None) -> list:
+    """Generate 2 dynamic questions + 1 static ReCircle contact button"""
     query_lower = user_query.lower()
+    previous_suggestions = previous_suggestions or []
     
-    # Check if user is asking for help/assistance or has high priority intent
-    help_keywords = ['help', 'assist', 'support', 'guidance', 'who will help', 'can you help', 'need help']
-    is_help_query = any(keyword in query_lower for keyword in help_keywords)
+    # Static 3rd question - always ReCircle contact button
+    static_contact_question = "Connect me to ReCircle"
     
-    # Check intent priority if available
-    is_high_priority = False
-    if intent_result:
-        high_priority_intents = ['contact_intent', 'sales_opportunity', 'urgent_need', 'high_interest']
-        is_high_priority = (intent_result.intent in high_priority_intents and intent_result.confidence >= 0.6) or intent_result.should_connect
+    # Try FAQ questions first with exclusion of previous suggestions
+    faq_questions = get_faq_questions(user_query, previous_suggestions)
+    if len(faq_questions) >= 2:
+        return faq_questions[:2] + [static_contact_question]
     
-    # If help query or high priority, include ReCircle service questions (not contact)
-    if is_help_query or is_high_priority:
-        recircle_questions = [
-            "How can ReCircle help me with EPR compliance?",
-            "What services does ReCircle offer?",
-            "What makes ReCircle different from other EPR service providers?",
-            "Can ReCircle handle my complete EPR compliance?",
-            "What is ReCircle's process for EPR registration?"
-        ]
-        # Mix ReCircle questions with relevant ones
-        try:
-            context_text = ""
-            if search_results:
-                for result in search_results[:2]:
-                    context_text += result.get('document', '')[:150] + " "
-            
-            prompt = f"""User asked: "{user_query}"
+    # Fallback: 2 contextual questions + static contact question
+    fallback = get_fallback_questions(user_query, previous_suggestions)
+    return fallback[:2] + [static_contact_question]
 
-Generate 1 specific follow-up question about: {user_query}
-Format: Return ONLY the question, ending with '?'. No numbering."""
-            
-            model = genai.GenerativeModel('gemini-1.5-flash')
-            response = model.generate_content(prompt, generation_config=genai.types.GenerationConfig(temperature=0.9, max_output_tokens=100))
-            
-            if response and response.text:
-                lines = [line.strip().lstrip('0123456789.-*• ').strip() for line in response.text.strip().split('\n')]
-                ai_questions = [line for line in lines if line and '?' in line and len(line) > 10][:1]
-                # Combine: 1 AI question + 2 ReCircle questions = 3 total
-                return ai_questions + recircle_questions[:2]
-        except Exception as e:
-            logger.warning(f"AI question generation failed: {e}")
-        
-        # Fallback: return ReCircle questions
-        return recircle_questions[:3]
-    
-    # Regular AI-generated questions for other queries
+def get_faq_questions(user_query: str, previous_suggestions: list = None) -> list:
+    """Get related questions from FAQ CSV based on user query, excluding previous suggestions"""
     try:
-        context_text = ""
-        if search_results:
-            for result in search_results[:3]:
-                context_text += result.get('document', '')[:200] + " "
+        faq_path = os.path.join(os.path.dirname(__file__), 'data', 'epr_faqs.csv')
+        if not os.path.exists(faq_path):
+            logger.warning(f"FAQ file not found: {faq_path}")
+            return []
         
-        prompt = f"""User asked: "{user_query}"
-
-Context from EPR knowledge base:
-{context_text[:500]}
-
-Generate exactly 3 highly relevant follow-up questions that:
-1. Directly relate to the user's query topic
-2. Help them understand next steps or related aspects
-3. Are practical and actionable
-
-Format: Return ONLY the questions, one per line, each ending with '?'. No numbering, bullets, or explanations."""
+        previous_suggestions = previous_suggestions or []
+        query_lower = user_query.lower()
+        query_words = set(query_lower.split())
         
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        response = model.generate_content(
-            prompt,
-            generation_config=genai.types.GenerationConfig(
-                temperature=0.9,
-                max_output_tokens=150,
-                top_p=0.95
-            )
-        )
+        # Score each FAQ question based on keyword matches
+        scored_questions = []
         
-        if response and response.text:
-            lines = response.text.strip().split('\n')
-            questions = []
-            for line in lines:
-                line = line.strip().lstrip('0123456789.-*• ').strip()
-                if line and '?' in line and len(line) > 10:
-                    questions.append(line)
+        with open(faq_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                keywords = row.get('keywords', '').lower()
+                question = row.get('question', '')
+                
+                # Skip if question is same as user query or was previously suggested
+                if question.lower().strip() == query_lower.strip():
+                    continue
+                if question in previous_suggestions:
+                    continue
+                
+                # Calculate match score
+                keyword_words = set(keywords.split())
+                common_words = query_words.intersection(keyword_words)
+                score = len(common_words)
+                
+                if score > 0:
+                    scored_questions.append((question, score))
+        
+        # Sort by score (highest first) and get top 2 unique questions
+        scored_questions.sort(key=lambda x: x[1], reverse=True)
+        top_questions = [q[0] for q in scored_questions[:2]]
+        
+        if len(top_questions) >= 2:
+            return top_questions
+        
+        # If not enough matches, add high priority questions
+        with open(faq_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            high_priority = [row['question'] for row in reader 
+                           if row.get('priority') == 'high' 
+                           and row['question'] not in top_questions
+                           and row['question'] not in previous_suggestions
+                           and row['question'].lower().strip() != query_lower.strip()]
             
-            if len(questions) >= 2:
-                logger.info(f"✅ Generated {len(questions)} AI questions")
-                return questions[:3]
-        
-    except Exception as e:
-        logger.warning(f"AI question generation failed: {e}")
+            needed = 2 - len(top_questions)
+            return top_questions + high_priority[:needed]
     
-    return get_fallback_questions(user_query)
+    except Exception as e:
+        logger.error(f"Error reading FAQ CSV: {e}")
+        return []
 
-def get_fallback_questions(user_query: str) -> list:
-    """Generate contextual fallback questions based on user query"""
+def get_fallback_questions(user_query: str, previous_suggestions: list = None) -> list:
+    """Generate contextual fallback questions based on user query, excluding previous suggestions"""
+    previous_suggestions = previous_suggestions or []
     query_lower = user_query.lower()
     
     # Extract key topics from query
     if any(word in query_lower for word in ['register', 'registration', 'how to register']):
-        return [
+        questions = [
             "What documents are needed for EPR registration?",
             "How long does EPR registration take?",
             "Who can help me with EPR registration?"
         ]
+        return [q for q in questions if q not in previous_suggestions][:3]
     elif any(word in query_lower for word in ['penalty', 'fine', 'non-compliance', 'violation']):
-        return [
+        questions = [
             "What are EPR non-compliance penalties?",
             "How can I avoid EPR fines?",
             "How do I resolve penalty notices?"
         ]
+        return [q for q in questions if q not in previous_suggestions][:3]
     elif any(word in query_lower for word in ['certificate', 'credit', 'epr certificate']):
-        return [
+        questions = [
             "Where can I buy EPR certificates?",
             "What is the validity of EPR certificates?",
             "What is the cost of EPR certificates?"
         ]
+        return [q for q in questions if q not in previous_suggestions][:3]
     elif any(word in query_lower for word in ['target', 'obligation', 'fulfill', 'achieve']):
-        return [
+        questions = [
             "How to calculate my EPR target?",
             "Who will help me fulfill my EPR target?",
             "What happens if I don't meet EPR targets?"
         ]
+        return [q for q in questions if q not in previous_suggestions][:3]
     elif any(word in query_lower for word in ['deadline', 'timeline', 'when', 'date']):
-        return [
+        questions = [
             "What are the key EPR deadlines?",
             "When is the EPR annual return due?",
             "How often do I need to report under EPR?"
         ]
+        return [q for q in questions if q not in previous_suggestions][:3]
     elif any(word in query_lower for word in ['cost', 'price', 'fee', 'expensive']):
-        return [
+        questions = [
             "How much does EPR compliance cost?",
             "What are the EPR registration fees?",
             "How can I reduce EPR compliance costs?"
         ]
+        return [q for q in questions if q not in previous_suggestions][:3]
     elif any(word in query_lower for word in ['recircle', 'help', 'service provider', 'pro']):
-        return [
+        questions = [
             "What services does ReCircle offer?",
             "How can ReCircle help with EPR compliance?",
             "Can ReCircle manage my entire EPR process?"
         ]
+        return [q for q in questions if q not in previous_suggestions][:3]
     elif any(word in query_lower for word in ['document', 'paperwork', 'proof']):
-        return [
+        questions = [
             "What documents do I need for EPR registration?",
             "What proof is required for EPR compliance?",
             "How long should I keep EPR records?"
         ]
+        return [q for q in questions if q not in previous_suggestions][:3]
     else:
         # Generic relevant questions
-        return [
+        questions = [
             "What is EPR and who needs to comply?",
             "How do I get started with EPR compliance?",
             "Who can help me with EPR compliance?"
         ]
+        return [q for q in questions if q not in previous_suggestions][:3]
 
-def find_best_answer(user_query: str, intent_result=None) -> dict:
+def find_best_answer(user_query: str, intent_result=None, previous_suggestions: list = None) -> dict:
     logger.info(f"🔍 Searching for query: {user_query[:100]}...")
+    previous_suggestions = previous_suggestions or []
     
     collections = get_collections()
     if not collections:
@@ -334,14 +328,13 @@ def find_best_answer(user_query: str, intent_result=None) -> dict:
     # Check for ReCircle-specific queries
     query_lower = user_query.lower()
     is_recircle_query = "recircle" in query_lower or "re-circle" in query_lower or "re circle" in query_lower
-    is_contact_query = any(word in query_lower for word in ["contact", "phone", "email", "reach", "address", "location", "office", "where", "mumbai"])
     
-    if is_recircle_query and is_contact_query:
+    if is_recircle_query:
         recircle_info = get_recircle_info(user_query)
         answer = recircle_info
     
-    # Generate suggestions
-    suggestions = generate_related_questions(user_query, filtered_results, intent_result)
+    # Generate suggestions with exclusion of previous suggestions
+    suggestions = generate_related_questions(user_query, filtered_results, intent_result, previous_suggestions)
     
     return {
         "answer": answer,

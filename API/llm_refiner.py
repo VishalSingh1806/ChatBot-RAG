@@ -1,5 +1,4 @@
-from google import genai
-from google.genai import types
+import google.generativeai as genai
 from typing import List, Dict, Optional, Tuple
 import os
 import logging
@@ -18,12 +17,8 @@ load_dotenv()
 phone_number = "9004240004"
 email = "info@recircle.in"
 
-# Initialize Gemini client
-client = genai.Client(
-    vertexai=True,
-    project=os.getenv("GOOGLE_PROJECT_ID", "epr-chatbot-443706"),
-    location=os.getenv("GOOGLE_LOCATION", "global"),
-)
+# Configure Gemini with API key
+genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
 
 model = "gemini-2.0-flash-exp"
 
@@ -108,7 +103,7 @@ def refine_with_gemini(
         '11. For medium/high priority leads OR help queries: Replace generic answers with ReCircle-focused solutions\n'
         '12. Do NOT add contact info in the main answer - it will be added separately\n'
         '13. For company queries (about ReCircle): Do NOT add any contact promotion\n'
-        '14. Focus only on EPR and plastic waste topics\n'
+        '14. SCOPE: Focus on EPR, plastic waste management, and ReCircle topics. For completely unrelated topics (weather, sports, jokes), politely decline and redirect to EPR topics.\n'
         f'{context_instructions}'
     )
 #     prompt_text = (
@@ -139,31 +134,49 @@ def refine_with_gemini(
 # )
 
 
-    contents = [
-        types.Content(
-            role="user",
-            parts=[types.Part.from_text(text=prompt_text)]
-        )
+    # Create Gemini model instance
+    gemini_model = genai.GenerativeModel(model)
+    
+    # Configure generation settings
+    generation_config = genai.types.GenerationConfig(
+        temperature=0.7,
+        top_p=0.95,
+        max_output_tokens=1024
+    )
+    
+    # Configure safety settings
+    safety_settings = [
+        {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+        {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+        {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+        {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
     ]
 
-    config = types.GenerateContentConfig(
-        temperature=1,
-        top_p=0.95,
-        max_output_tokens=1024,
-        safety_settings=[
-            types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF"),
-            types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="OFF"),
-            types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="OFF"),
-            types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="OFF"),
-        ],
-        
-    )
-
     result = ""
-    for chunk in client.models.generate_content_stream(
-        model=model, contents=contents, config=config
-    ):
-        result += chunk.text
+    try:
+        response = gemini_model.generate_content(
+            prompt_text,
+            generation_config=generation_config,
+            safety_settings=safety_settings,
+            stream=True
+        )
+        
+        for chunk in response:
+            if chunk.text:
+                result += chunk.text
+    except Exception as e:
+        logger.error(f"Error generating content with Gemini: {e}")
+        # Fallback to non-streaming if streaming fails
+        try:
+            response = gemini_model.generate_content(
+                prompt_text,
+                generation_config=generation_config,
+                safety_settings=safety_settings
+            )
+            result = response.text
+        except Exception as e2:
+            logger.error(f"Fallback generation also failed: {e2}")
+            result = "I apologize, but I'm having trouble generating a response right now. Please try again."
 
     refined_answer = result.strip()
     

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Send, Bot, User } from 'lucide-react';
+import { X, Send, Bot, User, Download } from 'lucide-react';
 import customLogo from './assets/ReCircle Logo Identity_RGB-05.png';
 
 interface Message {
@@ -33,13 +33,13 @@ function App() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [showWelcomePopup, setShowWelcomePopup] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const lastBotMessageRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
+    if (isOpen) {
       setShowWelcomePopup(false);
-    }, 8000);
-    return () => clearTimeout(timer);
-  }, []);
+    }
+  }, [isOpen]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -110,13 +110,27 @@ function App() {
           setShowForm(false);
           setIsFormSubmitted(true);
 
+          // Load chat history if available
+          const loadedMessages: Message[] = [];
+          if (sessionData.chat_history && sessionData.chat_history.length > 0) {
+            console.log(`📜 Loading ${sessionData.chat_history.length} previous messages`);
+            sessionData.chat_history.forEach((msg: any, index: number) => {
+              loadedMessages.push({
+                id: `history-${index}`,
+                text: msg.text,
+                sender: msg.role === 'user' ? 'user' : 'bot',
+                timestamp: new Date()
+              });
+            });
+          }
+
           const welcomeMessage: Message = {
             id: Date.now().toString(),
             text: `🌟 Welcome back, ${sessionData.user_data.user_name?.split(' ')[0] || 'there'}!\nHow can I help you today?`,
             sender: 'bot',
             timestamp: new Date()
           };
-          setMessages([welcomeMessage]);
+          setMessages([...loadedMessages, welcomeMessage]);
         } else {
           console.log('📝 New session, please fill out the form.');
           setShowForm(true);
@@ -190,13 +204,13 @@ function App() {
       }
 
       // Update suggested questions dynamically from backend response
-      if (data.similar_questions && Array.isArray(data.similar_questions) && data.similar_questions.length > 0) {
+      if (data.similar_questions && Array.isArray(data.similar_questions)) {
         setSuggestedQuestions(data.similar_questions);
-      } else {
-        setSuggestedQuestions([]);
       }
       
-      setTimeout(() => scrollToBottom(), 100);
+      setTimeout(() => {
+        lastBotMessageRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
     } catch (error) {
       console.error('❌ Error sending message:', error);
       const errorMessage: Message = {
@@ -308,13 +322,28 @@ function App() {
         // On successful submission, hide form and show welcome message
         setShowForm(false);
         setIsFormSubmitted(true);
+        
+        // Load chat history if available (for returning users)
+        const loadedMessages: Message[] = [];
+        if (data.chat_history && data.chat_history.length > 0) {
+          console.log(`📜 Loading ${data.chat_history.length} previous messages`);
+          data.chat_history.forEach((msg: any, index: number) => {
+            loadedMessages.push({
+              id: `history-${index}`,
+              text: msg.text,
+              sender: msg.role === 'user' ? 'user' : 'bot',
+              timestamp: new Date()
+            });
+          });
+        }
+        
         const welcomeMessage: Message = {
           id: Date.now().toString(),
           text: `🌟 Great to meet you, ${formData.name.split(' ')[0]}!\nWhat would you like to know today?`,
           sender: 'bot',
           timestamp: new Date()
         };
-        setMessages([welcomeMessage]);
+        setMessages([...loadedMessages, welcomeMessage]);
         setSuggestedQuestions([]);
         
       } catch (err) {
@@ -342,7 +371,89 @@ function App() {
   };
 
   const handleSuggestionClick = async (question: string) => {
+    // Check if this is the contact button
+    const isContactButton = question.toLowerCase().includes('connect me to recircle');
+    
+    if (isContactButton) {
+      // Add user message first
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        text: question,
+        sender: 'user',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, userMessage]);
+      setIsTyping(true);
+      
+      // Trigger immediate backend notification
+      try {
+        const response = await apiCall('/trigger_contact_intent', {
+          method: 'POST',
+        });
+        console.log('✅ Contact button clicked - backend notified immediately');
+        
+        // Show the response message to user immediately
+        const botMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          text: response.message,
+          sender: 'bot',
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, botMessage]);
+        
+        // Keep existing suggestions visible for continued conversation
+        // Backend will provide new dynamic suggestions on next query
+        
+        setIsTyping(false);
+        return; // Don't submit as regular query
+      } catch (error) {
+        console.error('❌ Failed to trigger contact intent:', error);
+        setIsTyping(false);
+      }
+    }
+    
+    // Continue with normal query submission for other suggestions
     await submitQuery(question);
+  };
+
+  const handleDownloadChat = async () => {
+    console.log('📥 Download button clicked!');
+    try {
+      const sessionId = localStorage.getItem('session_id');
+      console.log('Session ID:', sessionId);
+      if (!sessionId) {
+        alert('No session found. Please start a conversation first.');
+        return;
+      }
+      
+      console.log('Fetching PDF from:', `/download_chat/${sessionId}`);
+      const response = await fetch(`/download_chat/${sessionId}`, {
+        credentials: 'include'
+      });
+      
+      console.log('Response status:', response.status);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        throw new Error('Failed to download chat');
+      }
+      
+      const blob = await response.blob();
+      console.log('Blob size:', blob.size);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const firstName = formData.name.split(' ')[0];
+      a.download = `${firstName}'s_Discussion_with_ReBot.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      console.log('✅ Download complete!');
+    } catch (error) {
+      console.error('❌ Error downloading chat:', error);
+      alert('Failed to download chat. Please try again.');
+    }
   };
 
   return (
@@ -422,12 +533,23 @@ function App() {
                   </p>
                 </div>
               </div>
-              <button
-                onClick={() => setIsOpen(false)}
-                className="text-white hover:opacity-70 transition-opacity duration-200 text-lg font-bold"
-              >
-                ✖
-              </button>
+              <div className="flex items-center gap-2">
+                {isFormSubmitted && messages.some(m => m.sender === 'user') && (
+                  <button
+                    onClick={handleDownloadChat}
+                    className="text-white hover:opacity-70 transition-opacity duration-200"
+                    title="Download chat transcript"
+                  >
+                    <Download className="w-5 h-5" />
+                  </button>
+                )}
+                <button
+                  onClick={() => setIsOpen(false)}
+                  className="text-white hover:opacity-70 transition-opacity duration-200 text-lg font-bold"
+                >
+                  ✖
+                </button>
+              </div>
             </div>
 
             {/* Messages */}
@@ -532,26 +654,49 @@ function App() {
               )}
 
               {/* Messages */}
-              {messages.map((msg) => (
-                <div key={msg.id} className={`flex mb-3 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`flex items-end gap-2 max-w-xs ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                    <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#184040' }}>
-                      {msg.sender === 'user' ? (
-                        <User className="w-5 h-5 text-white" />
-                      ) : (
-                        <Bot className="w-5 h-5 text-white" />
-                      )}
-                    </div>
-                    <div className={`px-4 py-3 rounded-2xl shadow-sm ${
-                      msg.sender === 'user'
-                        ? 'bg-purple-100 text-gray-800'
-                        : 'bg-white text-gray-800'
-                    }`}>
-                      <p className="text-sm leading-relaxed whitespace-pre-line">{msg.text}</p>
+              {messages.map((msg, index) => {
+                // Convert URLs and emails to clickable links
+                const renderMessageWithLinks = (text: string) => {
+                  const urlRegex = /(https?:\/\/[^\s]+)/g;
+                  const emailRegex = /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/g;
+                  
+                  const parts = text.split(/(https?:\/\/[^\s]+|[a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/);
+                  
+                  return parts.map((part, i) => {
+                    if (urlRegex.test(part)) {
+                      return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{part}</a>;
+                    } else if (emailRegex.test(part)) {
+                      return <a key={i} href={`mailto:${part}`} className="text-blue-600 hover:underline">{part}</a>;
+                    }
+                    return <span key={i}>{part}</span>;
+                  });
+                };
+                
+                return (
+                  <div 
+                    key={msg.id} 
+                    ref={msg.sender === 'bot' && index === messages.length - 1 ? lastBotMessageRef : null}
+                    className={`flex mb-3 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div className={`flex items-end gap-2 max-w-xs ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                      <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#184040' }}>
+                        {msg.sender === 'user' ? (
+                          <User className="w-5 h-5 text-white" />
+                        ) : (
+                          <Bot className="w-5 h-5 text-white" />
+                        )}
+                      </div>
+                      <div className={`px-4 py-3 rounded-2xl shadow-sm ${
+                        msg.sender === 'user'
+                          ? 'bg-purple-100 text-gray-800'
+                          : 'bg-white text-gray-800'
+                      }`}>
+                        <p className="text-sm leading-relaxed whitespace-pre-line">{renderMessageWithLinks(msg.text)}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
 
               {/* Typing Indicator */}
               {isTyping && (
@@ -590,13 +735,7 @@ function App() {
                 </div>
               )}
 
-              {/* Fallback message when no suggestions available */}
-              {isFormSubmitted && messages.length > 0 && suggestedQuestions.length === 0 && (
-                <div className="mt-4">
-                  <div className="text-sm font-medium text-gray-600 mb-2">Want to explore more?</div>
-                  <div className="text-xs text-gray-500">Ask me anything about EPR compliance, certificates, or regulations!</div>
-                </div>
-              )}
+              {/* Removed fallback - suggestions always show now */}
 
               <div ref={messagesEndRef} />
             </div>
@@ -610,7 +749,7 @@ function App() {
                   onChange={(e) => setMessage(e.target.value)}
                   onKeyPress={handleKeyPress}
                   placeholder="Ask your question..."
-                  maxLength={100}
+                  maxLength={250}
                   disabled={!isFormSubmitted || !sessionInitialized}
                   className="w-full px-4 py-3 pr-12 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
@@ -623,7 +762,7 @@ function App() {
                 </button>
               </div>
               <div className="text-xs text-gray-500 mt-1 ml-4">
-                {message.length}/100
+                The ReBot may make mistakes. For more information, please visit the CPCB portal.
               </div>
             </div>
           </div>

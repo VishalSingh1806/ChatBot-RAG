@@ -32,7 +32,9 @@ SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 BACKEND_EMAIL = os.getenv("BACKEND_TEAM_EMAIL", os.getenv("RECIPIENT_EMAIL"))
 SALES_EMAIL = os.getenv("SALES_TEAM_EMAIL")
 
-OUTPUT_DIR = os.path.join(os.getcwd(), "reports")
+# Get reports directory from config or environment
+from config import REPORTS_OUTPUT_DIR
+OUTPUT_DIR = REPORTS_OUTPUT_DIR
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # --------------------------------------------------------
@@ -172,18 +174,57 @@ def generate_pdf(session_id: str, session_info: dict, chat_logs: list, lead_info
         c.setFont("Helvetica", 10)
         c.drawString(60, y, "No chat messages found for this session.")
     else:
+        user_name = session_info.get('user_name', 'User')
+        first_name = user_name.split()[0] if user_name else 'User'
+        
         for i, msg in enumerate(chat_logs):
+            # Replace User/Bot with actual names
+            msg = msg.replace('User:', f'{first_name}:').replace('Bot:', 'ReBot:')
             msg = msg.replace('•', '').replace('■', '').replace('**', '')
-            c.setFont("Helvetica", 10)
-            wrapped = simpleSplit(msg, "Helvetica", 10, width - 100)
-            for line in wrapped:
+            
+            # Split label and content
+            parts = msg.split(':', 1)
+            if len(parts) == 2:
+                label = parts[0] + ':'
+                content = parts[1]
+                
                 if y < 70:
                     c.showPage()
                     y = height - 50
-                    c.setFont("Helvetica", 10)  # Reset font after new page
-                c.drawString(60, y, line.strip())
-                y -= 12
-            if msg.startswith("Bot:") and i < len(chat_logs) - 1:
+                
+                # Draw label in red bold
+                c.setFillColor(colors.red)
+                c.setFont("Helvetica-Bold", 10)
+                c.drawString(60, y, label)
+                label_width = c.stringWidth(label, "Helvetica-Bold", 10)
+                
+                # Draw content in black
+                c.setFillColor(colors.black)
+                c.setFont("Helvetica", 10)
+                wrapped = simpleSplit(content, "Helvetica", 10, width - 100 - label_width)
+                first_line = True
+                for line in wrapped:
+                    if y < 70:
+                        c.showPage()
+                        y = height - 50
+                        c.setFont("Helvetica", 10)
+                    if first_line:
+                        c.drawString(60 + label_width, y, line.strip())
+                        first_line = False
+                    else:
+                        c.drawString(60, y, line.strip())
+                    y -= 12
+            else:
+                c.setFont("Helvetica", 10)
+                wrapped = simpleSplit(msg, "Helvetica", 10, width - 100)
+                for line in wrapped:
+                    if y < 70:
+                        c.showPage()
+                        y = height - 50
+                    c.drawString(60, y, line.strip())
+                    y -= 12
+            
+            if msg.startswith("ReBot:") and i < len(chat_logs) - 1:
                 y -= 10
 
     c.save()
@@ -211,12 +252,6 @@ def send_pdf_report(session_id: str, pdf_path: str, session_info: dict, lead_inf
 🏢 Organization: {session_info.get('organization', 'N/A')}
 
 🎯 Lead Priority: {priority}
-💬 Total Queries: {lead_info.get('total_queries', 'N/A')}
-
-🕒 Session ID: {session_id}
-🗓️ Generated: {datetime.utcnow().isoformat()} UTC
-
-Please find the detailed session report attached.
     """
     msg.attach(MIMEText(body, "plain"))
 
@@ -236,6 +271,83 @@ Please find the detailed session report attached.
 # --------------------------------------------------------
 # Finalize session
 # --------------------------------------------------------
+def generate_user_pdf(session_id: str):
+    logging.info(f"📄 Generating user PDF for session: {session_id}")
+    session_info, chat_logs, _ = fetch_full_session(session_id)
+    
+    if not session_info:
+        logging.error(f"❌ No session info found for {session_id}")
+        return None
+    if not chat_logs:
+        logging.error(f"❌ No chat logs found for {session_id}")
+        return None
+    
+    logging.info(f"✅ Found {len(chat_logs)} messages for session {session_id}")
+    user_name = session_info.get('user_name', 'User')
+    first_name = user_name.split()[0] if user_name else 'User'
+    pdf_path = os.path.join(OUTPUT_DIR, f"Discussion_with_ReCircle_{session_id}.pdf")
+    
+    c = canvas.Canvas(pdf_path, pagesize=letter)
+    width, height = letter
+    y = height - 50
+
+    c.setFont("Helvetica-Bold", 18)
+    c.drawCentredString(width / 2, y, f"{first_name}'s Discussion with ReBot")
+    y -= 50
+    for msg in chat_logs:
+        original_msg = msg
+        is_user = msg.startswith('User:')
+        is_bot = msg.startswith('Bot:')
+        
+        msg = msg.replace('User:', f"{first_name}:").replace('Bot:', 'ReBot:')
+        msg = msg.replace('•', '').replace('■', '').replace('**', '')
+        
+        logging.info(f"Processing message: {original_msg[:50]}...")
+        
+        parts = msg.split(':', 1)
+        if len(parts) == 2:
+            label = parts[0] + ':'
+            content = parts[1]
+            
+            if y < 70:
+                c.showPage()
+                y = height - 50
+            
+            c.setFillColor(colors.red)
+            c.setFont("Helvetica-Bold", 10)
+            c.drawString(60, y, label)
+            label_width = c.stringWidth(label, "Helvetica-Bold", 10)
+            
+            c.setFillColor(colors.black)
+            c.setFont("Helvetica", 10)
+            wrapped = simpleSplit(content, "Helvetica", 10, width - 100 - label_width)
+            first_line = True
+            for line in wrapped:
+                if y < 70:
+                    c.showPage()
+                    y = height - 50
+                    c.setFont("Helvetica", 10)
+                if first_line:
+                    c.drawString(60 + label_width, y, line.strip())
+                    first_line = False
+                else:
+                    c.drawString(60, y, line.strip())
+                y -= 12
+        else:
+            c.setFont("Helvetica", 10)
+            wrapped = simpleSplit(msg, "Helvetica", 10, width - 100)
+            for line in wrapped:
+                if y < 70:
+                    c.showPage()
+                    y = height - 50
+                c.drawString(60, y, line.strip())
+                y -= 12
+        y -= 10
+
+    c.save()
+    logging.info(f"✅ User PDF created at: {pdf_path}")
+    return pdf_path
+
 def finalize_session(session_id: str):
     logging.info(f"🔄 Starting session finalization for: {session_id}")
     

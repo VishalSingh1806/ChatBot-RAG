@@ -23,13 +23,18 @@ async def monitor_sessions():
             session_keys = redis_client.keys("session:*")
             
             for key in session_keys:
-                if ":chat" in key or ":finalized" in key:
+                key_str = key.decode() if isinstance(key, bytes) else key
+                if ":chat" in key_str or ":finalized" in key_str or ":thankyou_sent" in key_str or ":monitor_inactivity" in key_str:
                     continue
                 
-                session_id = key.split(":")[1]
-                session_data = redis_client.hgetall(key)
+                session_id = key_str.split(":")[1]
+                session_data = redis_client.hgetall(key_str)
                 
-                if not session_data or not session_data.get("user_data_collected"):
+                if not session_data:
+                    continue
+                
+                user_data_collected = session_data.get(b"user_data_collected") or session_data.get("user_data_collected")
+                if not user_data_collected:
                     continue
                 
                 # Check if session has chat messages
@@ -43,9 +48,12 @@ async def monitor_sessions():
                 if redis_client.exists(finalized_key):
                     continue
                 
-                last_interaction = session_data.get("last_interaction")
+                last_interaction = session_data.get(b"last_interaction") or session_data.get("last_interaction")
                 if not last_interaction:
                     continue
+                
+                if isinstance(last_interaction, bytes):
+                    last_interaction = last_interaction.decode()
                 
                 try:
                     last_time = datetime.fromisoformat(last_interaction)

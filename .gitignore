@@ -30,6 +30,8 @@ API/chroma_db/
 # =========================
 *.pdf
 fwdplasticwastemanagementrules/
+API/reports/
+reports/
 
 # =========================
 # Python
@@ -92,6 +94,9 @@ logs/
 # =========================
 node_modules/
 npm-debug.log*
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
 
 # =========================
 # Docker
@@ -102,7 +107,9 @@ npm-debug.log*
 # Large data files
 # =========================
 *.csv
-data/
+!API/data/epr_faqs.csv
+API/data/*.csv
+!API/data/epr_faqs.csv
 *.xlsx
 *.xls
 
