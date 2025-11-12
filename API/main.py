@@ -244,7 +244,14 @@ async def handle_user_data(request: Request, user_data: UserData):
         
         logging.info(f"✅ Session {session_id} marked for inactivity monitoring")
         
-        return {**result, "chat_history": chat_history}
+        # Convert result to dict if it's a JSONResponse
+        if hasattr(result, 'body'):
+            import json
+            result_dict = json.loads(result.body)
+        else:
+            result_dict = result
+        
+        return {**result_dict, "chat_history": chat_history}
     except Exception as e:
         logging.error(f"❌ Error collecting user data: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Data collection failed")

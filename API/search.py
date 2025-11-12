@@ -60,11 +60,11 @@ def get_recircle_info(query: str) -> str:
         return "ReCircle specializes in EPR compliance, plastic waste management, and sustainability solutions for businesses across India.\n\nContact us: 9004240004 | info@recircle.in"
 
 def generate_related_questions(user_query: str, search_results: list = None, intent_result=None, previous_suggestions: list = None) -> list:
-    """Generate 2 dynamic questions + 1 static ReCircle contact button"""
+    """Generate 2 dynamic questions + 1 static ReCircle contact question"""
     query_lower = user_query.lower()
     previous_suggestions = previous_suggestions or []
     
-    # Static 3rd question - always ReCircle contact button
+    # Static 3rd question - always about ReCircle contact
     static_contact_question = "Connect me to ReCircle"
     
     # Try FAQ questions first with exclusion of previous suggestions
@@ -146,7 +146,8 @@ def get_fallback_questions(user_query: str, previous_suggestions: list = None) -
             "How long does EPR registration take?",
             "Who can help me with EPR registration?"
         ]
-        return [q for q in questions if q not in previous_suggestions][:3]
+        filtered = [q for q in questions if q not in previous_suggestions]
+        return filtered[:3] if filtered else questions[:2]
     elif any(word in query_lower for word in ['penalty', 'fine', 'non-compliance', 'violation']):
         questions = [
             "What are EPR non-compliance penalties?",
@@ -203,7 +204,8 @@ def get_fallback_questions(user_query: str, previous_suggestions: list = None) -
             "How do I get started with EPR compliance?",
             "Who can help me with EPR compliance?"
         ]
-        return [q for q in questions if q not in previous_suggestions][:3]
+        filtered = [q for q in questions if q not in previous_suggestions]
+        return filtered[:3] if filtered else questions[:2]
 
 def find_best_answer(user_query: str, intent_result=None, previous_suggestions: list = None) -> dict:
     logger.info(f"🔍 Searching for query: {user_query[:100]}...")

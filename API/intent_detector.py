@@ -223,7 +223,7 @@ class IntentDetector:
     
     def _should_suggest_connection(self, query: str, history: List[Dict], 
                                  engagement_score: float, intent: str, confidence: float) -> bool:
-        """Enhanced connection suggestion logic"""
+        """Enhanced connection suggestion logic - only for high-intent queries"""
         user_message_count = len([msg for msg in history if msg.get('role') == 'user']) + 1
         
         # Immediate connection for high-risk situations
@@ -231,34 +231,25 @@ class IntentDetector:
         if any(keyword in query for keyword in risk_keywords):
             return True
         
-        # Immediate connection for high-value intents
-        if intent in ['urgent_need'] and confidence > 0.5:
+        # Immediate connection for urgent needs
+        if intent in ['urgent_need', 'contact_intent'] and confidence > 0.7:
             return True
         
-        # Exclude definition questions and registration info from triggering company info
-        definition_keywords = ['what is', 'what are', 'define', 'definition', 'meaning of', 'explain']
-        registration_info_keywords = ['how to register', 'how do i register', 'register for', 'registration process']
-        
-        if any(keyword in query for keyword in definition_keywords + registration_info_keywords):
+        # Exclude informational queries
+        info_keywords = ['what is', 'what are', 'define', 'definition', 'meaning of', 'explain', 
+                        'how to', 'process', 'documents', 'required', 'timeline', 'date', 'when']
+        if any(keyword in query for keyword in info_keywords):
             return False
         
-        # Help requests and service inquiries only
-        help_keywords = ['help', 'assist', 'support', 'guidance', 'who will help', 'can you help', 'need help']
-        service_keywords = ['consultation', 'quote', 'pricing', 'cost of service']
+        # Only for explicit help/service requests
+        help_keywords = ['help me', 'assist me', 'need help', 'want help', 'can you help']
+        service_keywords = ['consultation', 'quote', 'pricing', 'cost of service', 'want to work with']
         
         if any(keyword in query for keyword in help_keywords + service_keywords):
             return True
         
-        # Progressive engagement-based connection
-        if user_message_count >= 3 and engagement_score >= 4.0:
-            return True
-        elif user_message_count >= 4 and engagement_score >= 2.5:
-            return True
-        elif user_message_count >= 2 and engagement_score >= 6.0:
-            return True
-        
-        # High engagement users
-        if engagement_score >= 5.0:
+        # Very high engagement only (10+ messages with high score)
+        if user_message_count >= 10 and engagement_score >= 8.0:
             return True
         
         return False
