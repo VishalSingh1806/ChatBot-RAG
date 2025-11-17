@@ -22,7 +22,14 @@
       "Bash(docker rm:*)",
       "Bash(docker rmi:*)",
       "Bash(git add:*)",
-      "Bash(sudo docker build:*)"
+      "Bash(sudo docker build:*)",
+      "Bash(gsutil ls:*)",
+      "Bash(sudo chmod:*)",
+      "Bash(sqlite3:*)",
+      "Bash(docker-compose down:*)",
+      "Bash(docker compose:*)",
+      "Bash(sudo lsof:*)",
+      "Bash(curl:*)"
     ],
     "deny": []
   }

@@ -15,15 +15,16 @@ services:
     container_name: chatbot_api
     restart: always
     env_file:
-      - .env
+      - ./API/.env
     environment:
       # This tells the API to connect to the 'redis' service, not 'localhost'
       - REDIS_HOST=redis
-      - CHROMA_DB_PATH=/app/chroma_db
     ports:
       - "8000:8000"
     volumes:
-      - chroma_data:/app/chroma_db
+      - /var/lib/chatbot/chromaDB:/var/lib/chatbot/chromaDB
+      - /var/lib/chatbot/chromaDB1:/var/lib/chatbot/chromaDB1
+      - /var/lib/chatbot/DB1:/var/lib/chatbot/DB1
     depends_on:
       - redis
   frontend:
@@ -32,11 +33,10 @@ services:
     container_name: chatbot_frontend
     restart: always
     ports:
-      # Map the standard web port 80 on the server to the container's port 80
-      - "80:80"
+      # Map port 3000 on the host to container's port 80 (nginx on host proxies from 80 -> 3000)
+      - "3000:80"
     depends_on:
       - api
 
 volumes:
   redis_data:
-  chroma_data:
