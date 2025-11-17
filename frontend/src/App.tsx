@@ -47,8 +47,8 @@ function App() {
 
   // Create a consistent fetch function with proper credentials and error handling
   const apiCall = async (endpoint: string, options: RequestInit = {}) => {
-    // Use a relative path for the API. Vite will proxy this to the backend.
-    const baseUrl = '';
+    // Use production API URL when embedded, relative path in development
+    const baseUrl = import.meta.env.PROD ? 'https://rebot.recircle.in' : '';
     const defaultOptions: RequestInit = {
       credentials: 'include', // This is crucial for session cookies
       headers: {

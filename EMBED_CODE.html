@@ -1,0 +1,56 @@
+<!-- ============================================ -->
+<!-- ReCircle Chatbot Widget - Embed Code        -->
+<!-- ============================================ -->
+<!--
+    INSTRUCTIONS FOR WORDPRESS DEVELOPER:
+
+    1. Copy the code below (from <iframe> to </script>)
+    2. Paste it in your WordPress theme footer.php
+       just BEFORE the closing </body> tag
+
+    OR
+
+    Use the "Insert Headers and Footers" plugin:
+    - Install plugin from WordPress.org
+    - Go to Settings → Insert Headers and Footers
+    - Paste code in "Scripts in Footer" section
+    - Save
+-->
+
+<!-- START: Copy from here -->
+<iframe
+    id="recircle-chatbot-iframe"
+    src="https://rebot.recircle.in"
+    style="
+        position: fixed;
+        bottom: 0;
+        right: 0;
+        width: 100%;
+        height: 100%;
+        border: none;
+        z-index: 999999;
+        pointer-events: none;
+    "
+    allow="cross-origin"
+    title="ReCircle Chatbot"
+></iframe>
+
+<script>
+(function() {
+    var iframe = document.getElementById('recircle-chatbot-iframe');
+    if (iframe) {
+        iframe.addEventListener('load', function() {
+            iframe.style.pointerEvents = 'auto';
+        });
+    }
+})();
+</script>
+<!-- END: Copy to here -->
+
+<!-- ============================================ -->
+<!-- Expected Result:                             -->
+<!-- - A pulsing green chat bubble appears        -->
+<!--   at the bottom-right corner                 -->
+<!-- - Clicking it opens the chat interface       -->
+<!-- - Users can ask questions about EPR          -->
+<!-- ============================================ -->

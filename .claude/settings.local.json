@@ -29,7 +29,9 @@
       "Bash(docker-compose down:*)",
       "Bash(docker compose:*)",
       "Bash(sudo lsof:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(npm run build:widget:*)",
+      "Bash(npm install:*)"
     ],
     "deny": []
   }

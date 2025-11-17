@@ -61,6 +61,10 @@ allow_origins = [
     "https://rebot.recircle.in",
     "http://rebot.recircle.in:80",
     "https://rebot.recircle.in:443",
+    "http://recircle.in",
+    "https://recircle.in",
+    "http://www.recircle.in",
+    "https://www.recircle.in",
 ]
 app.add_middleware(
     CORSMiddleware,

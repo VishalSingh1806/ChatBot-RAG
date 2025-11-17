@@ -12,4 +12,18 @@ export default defineConfig({
       '/trigger_contact_intent': { target: 'http://127.0.0.1:8000', changeOrigin: true },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Create a single JS file for the widget
+        entryFileNames: 'assets/chatbot-widget.js',
+        chunkFileNames: 'assets/[name].js',
+        assetFileNames: 'assets/[name].[ext]'
+      }
+    }
+  },
+  define: {
+    // Use production API URL when building
+    'import.meta.env.VITE_API_URL': JSON.stringify(process.env.VITE_API_URL || 'https://rebot.recircle.in')
+  }
 })
