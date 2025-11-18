@@ -17,3 +17,9 @@ pdfplumber
 langchain
 langchain-text-splitters
 reportlab
+beautifulsoup4
+requests
+schedule
+tqdm
+numpy
+urllib3

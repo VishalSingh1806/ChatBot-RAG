@@ -31,7 +31,8 @@
       "Bash(sudo lsof:*)",
       "Bash(curl:*)",
       "Bash(npm run build:widget:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(pip install:*)"
     ],
     "deny": []
   }

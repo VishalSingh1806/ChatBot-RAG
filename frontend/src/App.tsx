@@ -457,7 +457,7 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-black relative overflow-hidden">
+    <div className="min-h-screen bg-transparent relative overflow-hidden">
       <style>{`
         @keyframes pulse-glow {
           0%, 100% {

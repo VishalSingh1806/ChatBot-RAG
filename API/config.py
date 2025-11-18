@@ -9,18 +9,22 @@ load_dotenv()
 # Get base directory (API folder)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# ChromaDB Configuration - All 3 databases
-CHROMA_DB_PATH_1 = os.getenv("CHROMA_DB_PATH_1", r"C:\Users\BHAKTI\OneDrive\Desktop\ReCircle\EPR ChatBot\chromaDB")
-CHROMA_DB_PATH_2 = os.getenv("CHROMA_DB_PATH_2", r"C:\Users\BHAKTI\OneDrive\Desktop\ReCircle\EPR ChatBot\chromaDB1")
-CHROMA_DB_PATH_3 = os.getenv("CHROMA_DB_PATH_3", r"C:\Users\BHAKTI\OneDrive\Desktop\ReCircle\EPR ChatBot\DB1")
+# ChromaDB Configuration - NEW MERGED DATABASE
+# This is the intelligent, auto-updated database with latest CPCB data
+CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", os.path.join(BASE_DIR, "merged_chromadb"))
 
-CHROMA_DB_PATHS = [CHROMA_DB_PATH_1, CHROMA_DB_PATH_2, CHROMA_DB_PATH_3]
+# Collection name for the merged database
+COLLECTION_NAME = os.getenv("COLLECTION_NAME", "EPR-Merged")
 
-# Collection names for each database
+# Legacy configuration (kept for backward compatibility, but not used by default)
+CHROMA_DB_PATH_1 = os.getenv("CHROMA_DB_PATH_1", r"C:\Users\visha\Downloads\chromaDB-20251112T052425Z-1-001\chromaDB\chromaDB")
+CHROMA_DB_PATH_2 = os.getenv("CHROMA_DB_PATH_2", r"C:\Users\visha\Downloads\chromaDB-20251112T052425Z-1-001\chromaDB\chromaDB1")
+CHROMA_DB_PATH_3 = os.getenv("CHROMA_DB_PATH_3", r"C:\Users\visha\Downloads\chromaDB-20251112T052425Z-1-001\chromaDB\DB1")
+
+# For backward compatibility - points to new merged database
+CHROMA_DB_PATHS = [CHROMA_DB_PATH]
 COLLECTIONS = {
-    CHROMA_DB_PATH_1: ["EPR-chatbot"],
-    CHROMA_DB_PATH_2: ["EPRChatbot-1"],
-    CHROMA_DB_PATH_3: ["FinalDB"]
+    CHROMA_DB_PATH: [COLLECTION_NAME]
 }
 
 # PDF Documents path
