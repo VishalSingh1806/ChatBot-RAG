@@ -34,7 +34,8 @@
       "Bash(npm install:*)",
       "Bash(pip install:*)",
       "Bash(git fetch:*)",
-      "Bash(git merge:*)"
+      "Bash(git merge:*)",
+      "Bash(git pull:*)"
     ],
     "deny": []
   }
