@@ -45,19 +45,26 @@ def get_recircle_info(query: str) -> str:
     query_lower = query.lower()
     
     if any(word in query_lower for word in ["contact", "details", "phone", "email", "reach"]):
-        return "📍 Mumbai Office: 3rd Floor, APML Tower, Vishveshwar Nagar Rd, Yashodham, Goregaon, Mumbai, Maharashtra 400063\n\n📞 Phone: 9004240004\n📧 Email: info@recircle.in"
+        contact_email = os.getenv("CONTACT_EMAIL", "info@recircle.in")
+        return f"📍 Mumbai Office: 3rd Floor, APML Tower, Vishveshwar Nagar Rd, Yashodham, Goregaon, Mumbai, Maharashtra 400063\n\n📞 Phone: 9004240004\n📧 Email: {contact_email}"
     elif any(word in query_lower for word in ["office", "location", "address", "mumbai", "where"]):
-        return "📍 ReCircle Office: 3rd Floor, APML Tower, Vishveshwar Nagar Rd, Yashodham, Goregaon, Mumbai, Maharashtra 400063\n\nFor office visits or meetings, please call ahead: 9004240004"
+        contact_email = os.getenv("CONTACT_EMAIL", "info@recircle.in")
+        return f"📍 Mumbai Office: 3rd Floor, APML Tower, Vishveshwar Nagar Rd, Yashodham, Goregaon, Mumbai, Maharashtra 400063\n\n📞 Phone: 9004240004\n📧 Email: {contact_email}"
     elif any(word in query_lower for word in ["participate", "join", "benefit", "work with", "partner"]):
-        return "ReCircle is India's leading EPR compliance and plastic waste management company. We help businesses achieve plastic neutrality through:\n\n• Complete EPR registration and compliance management\n• Plastic waste collection and recycling solutions\n• EPR certificate procurement\n• Annual return filing and documentation\n• Customized sustainability programs\n\nTo discuss how ReCircle can help your company, contact us at:\n📞 9004240004\n📧 info@recircle.in"
+        contact_email = os.getenv("CONTACT_EMAIL", "info@recircle.in")
+        return f"ReCircle is India's leading EPR compliance and plastic waste management company. We help businesses achieve plastic neutrality through:\n\n• Complete EPR registration and compliance management\n• Plastic waste collection and recycling solutions\n• EPR certificate procurement\n• Annual return filing and documentation\n• Customized sustainability programs\n\nTo discuss how ReCircle can help your company, contact us at:\n📞 9004240004\n📧 {contact_email}"
     elif any(word in query_lower for word in ["service", "offer", "provide", "do"]):
-        return "ReCircle offers comprehensive EPR compliance solutions:\n\n• EPR Registration & Licensing\n• Plastic Waste Collection & Recycling\n• EPR Certificate Management\n• Annual Return Filing\n• Compliance Monitoring & Reporting\n• Sustainability Consulting\n\nWe help businesses meet their Extended Producer Responsibility obligations efficiently and cost-effectively.\n\nContact: 9004240004 | info@recircle.in"
+        contact_email = os.getenv("CONTACT_EMAIL", "info@recircle.in")
+        return f"ReCircle offers comprehensive EPR compliance solutions:\n\n• EPR Registration & Licensing\n• Plastic Waste Collection & Recycling\n• EPR Certificate Management\n• Annual Return Filing\n• Compliance Monitoring & Reporting\n• Sustainability Consulting\n\nWe help businesses meet their Extended Producer Responsibility obligations efficiently and cost-effectively.\n\nContact: 9004240004 | {contact_email}"
     elif any(word in query_lower for word in ["help", "assistance", "support"]):
-        return "Our ReCircle team is ready to provide personalized EPR solutions tailored to your business needs."
+        contact_email = os.getenv("CONTACT_EMAIL", "info@recircle.in")
+        return f"Our ReCircle team is ready to provide personalized EPR solutions tailored to your business needs.\n\nContact: 9004240004 | {contact_email}"
     elif any(word in query_lower for word in ["what is", "who is", "about", "company"]):
-        return "ReCircle is India's leading Extended Producer Responsibility (EPR) compliance and plastic waste management company. We help businesses achieve plastic neutrality through comprehensive waste collection, recycling, and compliance solutions.\n\nOur services include EPR registration, certificate management, waste collection infrastructure, and complete compliance support.\n\nGet in touch: 📞 9004240004 | 📧 info@recircle.in"
+        contact_email = os.getenv("CONTACT_EMAIL", "info@recircle.in")
+        return f"ReCircle is India's leading Extended Producer Responsibility (EPR) compliance and plastic waste management company. We help businesses achieve plastic neutrality through comprehensive waste collection, recycling, and compliance solutions.\n\nOur services include EPR registration, certificate management, waste collection infrastructure, and complete compliance support.\n\nGet in touch: 📞 9004240004 | 📧 {contact_email}"
     else:
-        return "ReCircle specializes in EPR compliance, plastic waste management, and sustainability solutions for businesses across India.\n\nContact us: 9004240004 | info@recircle.in"
+        contact_email = os.getenv("CONTACT_EMAIL", "info@recircle.in")
+        return f"ReCircle specializes in EPR compliance, plastic waste management, and sustainability solutions for businesses across India.\n\nContact us: 9004240004 | {contact_email}"
 
 def generate_related_questions(user_query: str, search_results: list = None, intent_result=None, previous_suggestions: list = None) -> list:
     """Generate 2 dynamic questions + 1 static ReCircle contact question"""

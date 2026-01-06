@@ -23,7 +23,7 @@ export default defineConfig({
     }
   },
   define: {
-    // Use production API URL when building
-    'import.meta.env.VITE_API_URL': JSON.stringify(process.env.VITE_API_URL || 'https://rebot.recircle.in')
+    // Use API URL from environment variable, no hardcoded fallback
+    'import.meta.env.VITE_API_URL': JSON.stringify(process.env.VITE_API_URL || '')
   }
 })

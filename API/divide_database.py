@@ -19,7 +19,7 @@ def categorize_with_gemini(content, source):
     """
     
     try:
-        client = genai.Client(api_key="AIzaSyBPe2GjCdL3oG3_Y9QqikIVKc8rXhT1ubI")
+        client = genai.Client(api_key=os.getenv('GOOGLE_API_KEY'))
         
         contents = [types.Content(
             role="user",

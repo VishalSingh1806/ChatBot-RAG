@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 phone_number = "9004240004"
-email = "info@recircle.in"
+email = os.getenv("CONTACT_EMAIL", "info@recircle.in")
 
 # Configure Gemini with API key
 genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))

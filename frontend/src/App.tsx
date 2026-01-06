@@ -47,8 +47,8 @@ function App() {
 
   // Create a consistent fetch function with proper credentials and error handling
   const apiCall = async (endpoint: string, options: RequestInit = {}) => {
-    // Use production API URL when embedded, relative path in development
-    const baseUrl = import.meta.env.PROD ? 'https://rebot.recircle.in' : '';
+    // Use API URL from environment variable, fallback to empty string for relative paths
+    const baseUrl = import.meta.env.VITE_API_URL || '';
     const defaultOptions: RequestInit = {
       credentials: 'include', // This is crucial for session cookies
       headers: {
@@ -463,12 +463,12 @@ function App() {
           0%, 100% {
             opacity: 1;
             transform: scale(1);
-            box-shadow: 0 0 20px 5px rgba(24, 64, 64, 0.8), 0 0 40px 10px rgba(16, 185, 129, 0.4);
+            box-shadow: 0 0 20px 5px rgba(1, 41, 138, 0.8), 0 0 40px 10px rgba(1, 41, 138, 0.4);
           }
           50% {
             opacity: 0.7;
             transform: scale(1.15);
-            box-shadow: 0 0 40px 15px rgba(24, 64, 64, 0.4), 0 0 60px 20px rgba(16, 185, 129, 0.2);
+            box-shadow: 0 0 40px 15px rgba(1, 41, 138, 0.4), 0 0 60px 20px rgba(1, 41, 138, 0.2);
           }
         }
         .pulse-animation {
@@ -478,10 +478,10 @@ function App() {
       {/* Welcome Popup */}
       {showWelcomePopup && !isOpen && (
         <div className="fixed bottom-24 right-5 z-40 animate-in slide-in-from-right-5 duration-500">
-          <div className="rounded-xl shadow-2xl p-3 relative" style={{ 
+          <div className="rounded-xl shadow-2xl p-3 relative" style={{
             maxWidth: '240px',
-            background: 'linear-gradient(135deg, #184040 0%, #10B981 100%)',
-            boxShadow: '0 10px 40px rgba(24, 64, 64, 0.3)'
+            background: 'linear-gradient(135deg, #01298a 0%, #0147d4 100%)',
+            boxShadow: '0 10px 40px rgba(1, 41, 138, 0.3)'
           }}>
             <button
               onClick={() => setShowWelcomePopup(false)}
@@ -503,8 +503,8 @@ function App() {
         {!isOpen && (
           <button
             onClick={() => setIsOpen(true)}
-            className="w-15 h-15 rounded-lg shadow-2xl hover:shadow-teal-500/25 transition-all duration-300 hover:scale-110 flex items-center justify-center pulse-animation"
-            style={{ width: '60px', height: '60px', backgroundColor: '#184040' }}
+            className="w-15 h-15 rounded-lg shadow-2xl hover:shadow-blue-500/25 transition-all duration-300 hover:scale-110 flex items-center justify-center pulse-animation"
+            style={{ width: '60px', height: '60px', backgroundColor: '#01298a' }}
           >
             <img src={customLogo} alt="Chat Bot Logo" className="w-15 h-10 object-contain" />
           </button>
@@ -516,13 +516,13 @@ function App() {
                style={{ width: '340px', height: '500px' }}>
             {/* Header */}
             <div className="p-3 flex items-center justify-between"
-                 style={{ backgroundColor: '#184040', color: 'white' }}>
+                 style={{ backgroundColor: '#01298a', color: 'white' }}>
               <div className="flex items-center gap-3">
                 <div className="relative">
                   <div className="w-13 h-13 rounded-full flex items-center justify-center">
                     <img src={customLogo} alt="Chat Bot Logo" className="w-10 h-10 object-contain" />
                   </div>
-                  <div className={`absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-teal-800 ${
+                  <div className={`absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-blue-900 ${
                     sessionInitialized ? 'bg-green-500' : isConnecting ? 'bg-yellow-500' : 'bg-red-500'
                   }`}></div>
                 </div>
@@ -553,8 +553,9 @@ function App() {
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-3 bg-gray-50"
-                 style={{ 
+            <div className="flex-1 overflow-y-auto p-3"
+                 style={{
+                   backgroundColor: '#f7f1ee',
                    backgroundImage: `url('data:image/svg+xml,%3Csvg width=%2260%22 height=%2260%22 viewBox=%220 0 60 60%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cg fill=%22none%22 fill-rule=%22evenodd%22%3E%3Cg fill=%22%23E5E5E5%22 fill-opacity=%220.1%22%3E%3Ccircle cx=%227%22 cy=%227%22 r=%227%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')`,
                    backgroundSize: '120px',
                    backgroundRepeat: 'repeat'
@@ -564,7 +565,7 @@ function App() {
               {isConnecting && (
                 <div className="flex justify-center items-center h-32">
                   <div className="text-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-800 mx-auto mb-2"></div>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-900 mx-auto mb-2"></div>
                     <p className="text-sm text-gray-600">Connecting to server...</p>
                   </div>
                 </div>
@@ -584,8 +585,8 @@ function App() {
               {/* Form */}
               {showForm && sessionInitialized && (
                 <div className="flex justify-center mb-4">
-                  <div className="bg-gray-50 border border-gray-300 rounded-lg p-5 shadow-lg max-w-xs w-full">
-                    <h3 className="text-center text-lg font-semibold mb-3" style={{ color: '#184040' }}>Let's get to know you!</h3>
+                  <div className="border border-gray-300 rounded-lg p-5 shadow-lg max-w-xs w-full" style={{ backgroundColor: '#ffffff' }}>
+                    <h3 className="text-center text-lg font-semibold mb-3" style={{ color: '#01298a' }}>Let's get to know you!</h3>
                     <form className="space-y-4">
                       <div>
                         <label className="block text-sm text-gray-700 mb-1">Name</label>
@@ -595,7 +596,7 @@ function App() {
                           value={formData.name}
                           onChange={(e) => handleFormChange('name', e.target.value)}
                           onBlur={() => validateField('name', formData.name)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-teal-600"
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-600"
                         />
                         {formErrors.name && <div className="text-red-500 text-xs mt-1">{formErrors.name}</div>}
                       </div>
@@ -608,7 +609,7 @@ function App() {
                           value={formData.email}
                           onChange={(e) => handleFormChange('email', e.target.value)}
                           onBlur={() => validateField('email', formData.email)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-teal-600"
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-600"
                         />
                         {formErrors.email && <div className="text-red-500 text-xs mt-1">{formErrors.email}</div>}
                       </div>
@@ -627,7 +628,7 @@ function App() {
                           }}
                           onBlur={() => validateField('phone', formData.phone)}
                           maxLength={10}
-                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-teal-600"
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-600"
                         />
                         {formErrors.phone && <div className="text-red-500 text-xs mt-1">{formErrors.phone}</div>}
                       </div>
@@ -640,7 +641,7 @@ function App() {
                           value={formData.organization}
                           onChange={(e) => handleFormChange('organization', e.target.value)}
                           onBlur={() => validateField('organization', formData.organization)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-teal-600"
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-600"
                         />
                         {formErrors.organization && <div className="text-red-500 text-xs mt-1">{formErrors.organization}</div>}
                       </div>
@@ -650,7 +651,7 @@ function App() {
                         onClick={handleFormSubmit}
                         disabled={!isFormValid() || !sessionInitialized}
                         className="w-full py-2 px-4 text-white rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        style={{ backgroundColor: '#184040' }}
+                        style={{ backgroundColor: '#01298a' }}
                       >
                         {sessionInitialized ? 'Submit' : 'Connecting...'}
                       </button>
@@ -685,7 +686,7 @@ function App() {
                     className={`flex mb-3 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
                     <div className={`flex items-end gap-2 max-w-xs ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                      <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#184040' }}>
+                      <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#01298a' }}>
                         {msg.sender === 'user' ? (
                           <User className="w-5 h-5 text-white" />
                         ) : (
@@ -708,7 +709,7 @@ function App() {
               {isTyping && (
                 <div className="flex mb-3 justify-start">
                   <div className="flex items-end gap-2 max-w-xs flex-row">
-                    <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#184040' }}>
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#01298a' }}>
                       <Bot className="w-5 h-5 text-white" />
                     </div>
                     <div className="px-4 py-3 rounded-2xl shadow-sm bg-white text-gray-800">
@@ -732,7 +733,7 @@ function App() {
                         key={index}
                         onClick={() => handleSuggestionClick(question)}
                         className="block w-full text-left px-3 py-2 text-sm rounded-full transition-colors duration-200"
-                        style={{ color: '#184040', borderWidth: '2px', borderColor: '#184040' }}
+                        style={{ color: '#01298a', borderWidth: '2px', borderColor: '#01298a' }}
                       >
                         {question}
                       </button>
@@ -747,7 +748,7 @@ function App() {
             </div>
 
             {/* Input */}
-            <div className="p-3 bg-gray-50 border-t border-gray-100">
+            <div className="p-3 bg-white border-t border-gray-100">
               <div className="relative">
                 <input
                   type="text"
@@ -757,14 +758,14 @@ function App() {
                   placeholder="Ask your question..."
                   maxLength={250}
                   disabled={!isFormSubmitted || !sessionInitialized}
-                  className="w-full px-4 py-3 pr-12 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full px-4 py-3 pr-12 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
                 <button
                   onClick={handleSendMessage}
                   disabled={!message.trim() || !isFormSubmitted || !sessionInitialized}
                   className="absolute right-3 top-1/2 transform -translate-y-1/2 w-8 h-8 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Send className="w-5 h-5" style={{ color: message.trim() && isFormSubmitted && sessionInitialized ? '#184040' : '#9CA3AF' }} />
+                  <Send className="w-5 h-5" style={{ color: message.trim() && isFormSubmitted && sessionInitialized ? '#01298a' : '#9CA3AF' }} />
                 </button>
               </div>
               <div className="text-xs text-gray-500 mt-1 ml-4">

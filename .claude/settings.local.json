@@ -32,7 +32,9 @@
       "Bash(curl:*)",
       "Bash(npm run build:widget:*)",
       "Bash(npm install:*)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(git fetch:*)",
+      "Bash(git merge:*)"
     ],
     "deny": []
   }

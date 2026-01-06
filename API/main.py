@@ -5,6 +5,10 @@ from starlette.middleware.sessions import SessionMiddleware
 from contextlib import asynccontextmanager
 import logging
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 import uuid
 import asyncio
 from datetime import datetime
@@ -49,7 +53,7 @@ app.add_middleware(
     path="/",
 )
 
-allow_origins = [
+allow_origins = os.getenv("ALLOWED_ORIGINS", "").split(",") if os.getenv("ALLOWED_ORIGINS") else [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:8080",
@@ -322,7 +326,8 @@ async def trigger_contact_intent(request: Request):
         finalize_session(session_id)
         
         # Return response for user
-        response_message = f"Thank you for your interest! Our ReCircle team has been notified and will reach out to you shortly. Meanwhile, you can connect with us on:\n\n🌐 Website: https://recircle.in/\n📞 Call us: 9004240004\n📧 Email: info@recircle.in\n\nYou can also continue asking questions while you wait!"
+        contact_email = os.getenv("CONTACT_EMAIL", "info@recircle.in")
+        response_message = f"Thank you for your interest! Our ReCircle team has been notified and will reach out to you shortly. Meanwhile, you can connect with us on:\n\n🌐 Website: https://recircle.in/\n📞 Call us: 9004240004\n📧 Email: {contact_email}\n\nYou can also continue asking questions while you wait!"
         
         logging.info(f"✅ Backend notified + user response sent for session {session_id}")
         return {
