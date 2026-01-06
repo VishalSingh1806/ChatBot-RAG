@@ -4,11 +4,14 @@ FROM python:3.10-slim
 # Set working directory inside container
 WORKDIR /app
 
-# Copy files to container
-COPY . .
+# Copy requirements first for better caching
+COPY requirements.txt .
 
 # Upgrade pip and install dependencies
-RUN pip install --upgrade pip && pip install -r requirements.txt
+RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
+
+# Copy application files
+COPY . .
 
 # Expose port (FastAPI default)
 EXPOSE 8000
