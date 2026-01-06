@@ -60,21 +60,41 @@ def get_recircle_info(query: str) -> str:
         return "ReCircle specializes in EPR compliance, plastic waste management, and sustainability solutions for businesses across India.\n\nContact us: 9004240004 | info@recircle.in"
 
 def generate_related_questions(user_query: str, search_results: list = None, intent_result=None, previous_suggestions: list = None) -> list:
-    """Generate 2 dynamic questions + 1 static ReCircle contact question"""
+    """Generate exactly 3 questions: 2 dynamic + 1 static ReCircle contact question"""
     query_lower = user_query.lower()
     previous_suggestions = previous_suggestions or []
     
     # Static 3rd question - always about ReCircle contact
     static_contact_question = "Connect me to ReCircle"
     
-    # Try FAQ questions first with exclusion of previous suggestions
-    faq_questions = get_faq_questions(user_query, previous_suggestions)
-    if len(faq_questions) >= 2:
-        return faq_questions[:2] + [static_contact_question]
+    # Get 2 dynamic questions from FAQ
+    dynamic_questions = []
     
-    # Fallback: 2 contextual questions + static contact question
-    fallback = get_fallback_questions(user_query, previous_suggestions)
-    return fallback[:2] + [static_contact_question]
+    # Try FAQ questions first
+    faq_questions = get_faq_questions(user_query, previous_suggestions)
+    dynamic_questions.extend(faq_questions[:2])
+    
+    # If we don't have 2 dynamic questions, add fallback questions
+    if len(dynamic_questions) < 2:
+        fallback_questions = get_fallback_questions(user_query, previous_suggestions)
+        # Add fallback questions that aren't already in dynamic_questions
+        for q in fallback_questions:
+            if q not in dynamic_questions and len(dynamic_questions) < 2:
+                dynamic_questions.append(q)
+    
+    # Ensure we have exactly 2 dynamic questions
+    if len(dynamic_questions) < 2:
+        # Add default questions if still not enough
+        default_questions = [
+            "What is EPR and who needs to comply?",
+            "How do I get started with EPR compliance?"
+        ]
+        for q in default_questions:
+            if q not in dynamic_questions and len(dynamic_questions) < 2:
+                dynamic_questions.append(q)
+    
+    # Return exactly 3 questions: 2 dynamic + 1 static
+    return dynamic_questions[:2] + [static_contact_question]
 
 def get_faq_questions(user_query: str, previous_suggestions: list = None) -> list:
     """Get related questions from FAQ CSV based on user query, excluding previous suggestions"""
@@ -254,14 +274,12 @@ def find_best_answer(user_query: str, intent_result=None, previous_suggestions: 
                     source = metadata.get('source', 'unknown')
                     if source == 'unknown' or not source:
                         # Try to extract from collection name or use fallback
-                        if collection_name == 'EPR-chatbot':
+                        if 'EPR-chatbot' in collection_name:
                             source = 'EPR_Knowledge_Base'
-                        elif collection_name == 'producer':
-                            source = 'Producer_Guidelines'
-                        elif collection_name == 'importer':
-                            source = 'Importer_Rules'
-                        elif collection_name == 'branc_owner':
-                            source = 'Brand_Owner_Manual'
+                        elif 'EPRChatbot-1' in collection_name:
+                            source = 'EPR_Regulations'
+                        elif 'FinalDB' in collection_name:
+                            source = 'EPR_Comprehensive_Database'
                         else:
                             source = f'{collection_name}_documents'
                     
@@ -296,15 +314,15 @@ def find_best_answer(user_query: str, intent_result=None, previous_suggestions: 
     
     # Apply very low confidence threshold for Langflow compatibility
     confidence_threshold = 0.001
-    distance_threshold = 5.0  # Increased for better coverage
+    distance_threshold = 1.5  # Reduced from 5.0 for better relevance
     
-    # Filter results by confidence threshold
+    # Filter results by distance threshold
     filtered_results = [r for r in all_results if r['distance'] <= distance_threshold]
     
     # If no results with threshold, use best available results
     if not filtered_results and all_results:
         logger.warning(f"⚠️ Using best available results (distance: {all_results[0]['distance']:.4f})")
-        filtered_results = all_results[:3]
+        filtered_results = all_results[:5]  # Increased from 3 to 5
     
     if not filtered_results:
         return {

@@ -18,8 +18,6 @@ CHROMA_DB_PATHS = [CHROMA_DB_PATH_1, CHROMA_DB_PATH_2, CHROMA_DB_PATH_3]
 
 # Collection names for each database
 COLLECTIONS = {
-    CHROMA_DB_PATH_1: ["EPR-chatbot"],
-    CHROMA_DB_PATH_2: ["EPRChatbot-1"],
     CHROMA_DB_PATH_3: ["FinalDB"]
 }
 

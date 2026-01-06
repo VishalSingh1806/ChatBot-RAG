@@ -10,6 +10,9 @@ import asyncio
 from datetime import datetime
 from models import QueryRequest, QueryResponse, UserData
 from search import find_best_answer
+from hybrid_search import find_hybrid_answer
+from sequential_hybrid_search import find_sequential_hybrid_answer
+from search_config import get_search_config, SearchMode
 from llm_refiner import refine_with_gemini
 from collect_data import collect_user_data, get_user_data_from_session, redis_client
 from lead_manager import lead_manager
@@ -54,6 +57,8 @@ allow_origins = [
     "http://127.0.0.1:5173",
     "http://localhost:8080",
     "http://127.0.0.1:8080",
+    "http://192.168.1.108:5173",  # Network URL for frontend
+    "http://192.168.1.108:8080",  # Network URL for backend
     "http://34.173.78.39",
     "http://34.173.78.39:8080",
     "http://34.173.78.39:80",
@@ -114,7 +119,7 @@ async def get_or_create_session(request: Request):
 
 @app.post("/query", response_model=QueryResponse)
 async def handle_query(request: Request, query: QueryRequest):
-    """Handles user query + logs chat + generates answer"""
+    """Handles user query + logs chat + generates answer - NOW USING HYBRID SEARCH"""
     try:
         if "session_id" not in request.session:
             request.session["session_id"] = str(uuid.uuid4())
@@ -132,16 +137,29 @@ async def handle_query(request: Request, query: QueryRequest):
         suggestions_key = f"session:{session_id}:suggestions"
         previous_suggestions = redis_client.lrange(suggestions_key, 0, -1) or []
         
-        result = find_best_answer(query.text, intent_result, previous_suggestions)
-        final_answer, intent_result, user_context = refine_with_gemini(
-            user_name=user_name,
-            query=query.text,
-            raw_answer=result["answer"],
-            history=history,
-            is_first_message=(len(history) == 0),
-            session_id=session_id,
-            source_info=result.get("source_info", {})
-        )
+        # Get search configuration
+        search_config = get_search_config()
+        search_mode = search_config.get_search_mode()
+        
+        # Use appropriate search method based on configuration
+        if search_mode == SearchMode.SEQUENTIAL_HYBRID:
+            result = find_sequential_hybrid_answer(query.text, intent_result, previous_suggestions)
+            final_answer = result["answer"]
+        elif search_mode == SearchMode.HYBRID:
+            result = find_hybrid_answer(query.text, intent_result, previous_suggestions)
+            final_answer = result["answer"]
+        else:
+            # Traditional search with LLM refinement
+            result = find_best_answer(query.text, intent_result, previous_suggestions)
+            final_answer, intent_result, user_context = refine_with_gemini(
+                user_name=user_name,
+                query=query.text,
+                raw_answer=result["answer"],
+                history=history,
+                is_first_message=(len(history) == 0),
+                session_id=session_id,
+                source_info=result.get("source_info", {})
+            )
 
         from intent_detector import intent_detector
         engagement_score = intent_detector._calculate_engagement_score(query.text.lower(), history)
@@ -203,8 +221,9 @@ async def handle_query(request: Request, query: QueryRequest):
                 "should_connect": intent_result.should_connect
             },
             "context": {
-                "industry": user_context.get('industry'),
-                "urgency": user_context.get('urgency'),
+                "search_type": "hybrid",
+                "llm_weight": "60%",
+                "db_weight": "40%",
                 "engagement_score": engagement_score
             },
             "source_info": result.get("source_info", {})
@@ -213,6 +232,104 @@ async def handle_query(request: Request, query: QueryRequest):
     except Exception as e:
         logging.error(f"❌ Error in /query endpoint: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Query processing failed")
+
+@app.post("/hybrid-query", response_model=QueryResponse)
+async def handle_hybrid_query(request: Request, query: QueryRequest):
+    """Handles user query with hybrid search (60% LLM + 40% Database)"""
+    try:
+        if "session_id" not in request.session:
+            request.session["session_id"] = str(uuid.uuid4())
+        session_id = request.session["session_id"]
+
+        user_data = await get_user_data_from_session(session_id)
+        user_name = user_data.get("user_name") if user_data else None
+        history = query.history or []
+
+        # Detect intent first for better question generation
+        from intent_detector import intent_detector
+        intent_result = intent_detector.analyze_intent(query.text, history)
+        
+        # Get previous suggestions from Redis
+        suggestions_key = f"session:{session_id}:suggestions"
+        previous_suggestions = redis_client.lrange(suggestions_key, 0, -1) or []
+        
+        # Use hybrid search (60% LLM + 40% Database)
+        result = find_hybrid_answer(query.text, intent_result, previous_suggestions)
+        
+        # The hybrid search already combines LLM and DB, so we use the result directly
+        final_answer = result["answer"]
+        
+        from intent_detector import intent_detector
+        engagement_score = intent_detector._calculate_engagement_score(query.text.lower(), history)
+
+        # ✅ Save chat to Redis for PDF report
+        try:
+            chat_key = f"session:{session_id}:chat"
+            redis_client.rpush(chat_key, f"User: {query.text}")
+            redis_client.rpush(chat_key, f"Bot: {final_answer}")
+            redis_client.expire(chat_key, SESSION_EXPIRY_DAYS * 86400)
+            chat_count = redis_client.llen(chat_key)
+            logging.info(f"💬 Hybrid search - Saved chat to Redis. Total messages: {chat_count}")
+            
+            # ✅ Update session last_interaction timestamp
+            session_key = f"session:{session_id}"
+            
+            if redis_client.exists(session_key):
+                redis_client.hset(session_key, "last_interaction", datetime.utcnow().isoformat())
+                logging.info(f"⏰ Updated last_interaction for session {session_id}")
+                
+                # Reset backend notification flag to allow new PDF after 60 min inactivity
+                backend_sent_key = f"session:{session_id}:backend_sent"
+                if redis_client.exists(backend_sent_key):
+                    redis_client.delete(backend_sent_key)
+                    logging.info(f"🔄 User resumed - reset backend notification flag for session {session_id}")
+        except Exception as chat_err:
+            logging.error(f"❌ Could not save chat logs: {chat_err}", exc_info=True)
+
+        # Track user intent
+        await lead_manager.track_user_intent(
+            session_id=session_id,
+            intent_result=intent_result,
+            query=query.text,
+            user_data=user_data,
+            engagement_score=engagement_score
+        )
+
+        # Check if query is off-topic (not EPR/ReCircle related)
+        query_lower = query.text.lower()
+        off_topic_keywords = ['weather', 'sports', 'movie', 'music', 'food', 'game', 'joke', 'story', 'news', 'politics']
+        is_off_topic = any(keyword in query_lower for keyword in off_topic_keywords)
+        
+        # Don't show suggestions for off-topic queries
+        suggestions = [] if is_off_topic else result["suggestions"]
+        
+        # Store new suggestions in Redis (excluding "Connect me to ReCircle")
+        if suggestions:
+            for suggestion in suggestions:
+                if suggestion != "Connect me to ReCircle":
+                    redis_client.rpush(suggestions_key, suggestion)
+            redis_client.expire(suggestions_key, SESSION_EXPIRY_DAYS * 86400)
+        
+        return {
+            "answer": final_answer,
+            "similar_questions": suggestions,
+            "intent": {
+                "type": intent_result.intent,
+                "confidence": intent_result.confidence,
+                "should_connect": intent_result.should_connect
+            },
+            "context": {
+                "search_type": "hybrid",
+                "llm_weight": "60%",
+                "db_weight": "40%",
+                "engagement_score": engagement_score
+            },
+            "source_info": result.get("source_info", {})
+        }
+
+    except Exception as e:
+        logging.error(f"❌ Error in /hybrid-query endpoint: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Hybrid query processing failed")
 
 @app.post("/collect_user_data")
 async def handle_user_data(request: Request, user_data: UserData):
