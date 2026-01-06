@@ -92,7 +92,21 @@ async def collect_user_data(user_data: UserData):
 
         session_id = user_data.session_id
 
-        # ✅ Return session_id for chatbot to use (no individual email)
+        # ✅ Send email in background (non-blocking)
+        if SMTP_ENABLED:
+            user_batch = [{
+                "session_id": session_id,
+                "name": user_data.name,
+                "email": user_data.email,
+                "phone": user_data.phone,
+                "organization": user_data.organization
+            }]
+            asyncio.create_task(send_email_batch(user_batch))
+            logging.info(f"📧 Email task queued for session: {session_id}")
+        else:
+            logging.warning(f"⚠️ SMTP disabled, skipping email for session: {session_id}")
+
+        # ✅ Return session_id for chatbot to use (immediate response)
         return JSONResponse(
             content={"message": "User data collected successfully", "session_id": session_id},
             status_code=200,

@@ -5,8 +5,8 @@ echo "🚀 Starting full deployment..."
 
 # ─── Step 0: Ensure shared network exists ───────────────────────────────────────
 echo "🌐 Ensuring Docker network 'chat-net' exists..."
-if ! docker network inspect chat-net &>/dev/null; then
-  docker network create chat-net
+if ! sudo docker network inspect chat-net &>/dev/null; then
+  sudo docker network create chat-net
   echo "✅ Created network 'chat-net'"
 else
   echo "✅ Network 'chat-net' already present"
@@ -14,14 +14,22 @@ fi
 
 # ─── Step 1: Pre-cleanup ────────────────────────────────────────────────────────
 echo "🧼 Cleaning up old containers and ports..."
-sudo docker container prune -f
-for name in chatbot-api-container chatbot-frontend-container chatbot-redis; do
+
+# Stop and remove any existing chatbot containers (handles both naming conventions)
+for name in chatbot-api-container chatbot-frontend-container chatbot-redis chatbot_redis chatbot_api chatbot_frontend; do
   id=$(sudo docker ps -aq --filter "name=$name")
-  if [ -n "$id" ]; then sudo docker rm -f $id; fi
+  if [ -n "$id" ]; then
+    echo "🗑️  Removing container: $name"
+    sudo docker stop $id 2>/dev/null || true
+    sudo docker rm -f $id 2>/dev/null || true
+  fi
 done
 
-# Kill anything on 80, 443, 8000, 3000
-for port in 80 443 8000 3000; do
+# Prune stopped containers
+sudo docker container prune -f
+
+# Kill anything on 80, 443, 8000, 3000, 6379 (Redis)
+for port in 80 443 8000 3000 6379; do
   pid=$(sudo lsof -t -i:$port || true)
   if [ -n "$pid" ]; then
     echo "❌ Port $port in use by PID $pid—killing"
@@ -124,7 +132,7 @@ sudo ln -sf /etc/nginx/sites-available/chatbot /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 
 # Test & reload Nginx
-sudo nginx -t
+sudo /usr/sbin/nginx -t
 sudo systemctl enable nginx
 sudo systemctl start nginx
 
