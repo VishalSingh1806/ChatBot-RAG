@@ -24,7 +24,9 @@ CHROMA_DB_PATH_3 = os.getenv("CHROMA_DB_PATH_3", r"C:\Users\visha\Downloads\chro
 # For backward compatibility - points to new merged database
 CHROMA_DB_PATHS = [CHROMA_DB_PATH]
 COLLECTIONS = {
-    CHROMA_DB_PATH: [COLLECTION_NAME]
+    CHROMA_DB_PATH_1: ["EPR-chatbot"],
+    CHROMA_DB_PATH_2: ["EPRChatbot-1"],
+    CHROMA_DB_PATH_3: ["FinalDB"]
 }
 
 # PDF Documents path

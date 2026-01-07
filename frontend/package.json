@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:network": "vite --host",
     "build": "vite build",
     "build:widget": "vite build --config vite.widget.config.ts",
     "lint": "eslint .",
