@@ -3,8 +3,9 @@ import os
 import logging
 from typing import Dict, List, Optional
 from dotenv import load_dotenv
-from search import find_best_answer, get_collections, generate_related_questions
+from search import find_best_answer, generate_related_questions
 from config import CHROMA_DB_PATHS, COLLECTIONS
+from web_search_integration import search_with_web, web_search_engine
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -22,36 +23,69 @@ class HybridSearchEngine:
     def search(self, query: str, intent_result=None, previous_suggestions: list = None) -> Dict:
         """
         Hybrid search combining LLM knowledge (60%) and database search (40%)
+        + Real-time web search for time-sensitive queries
         """
         logger.info(f"🔄 Hybrid search for: {query[:100]}...")
-        
+
+        # Check if query requires real-time web search
+        is_time_sensitive = web_search_engine.is_time_sensitive_query(query)
+
         # Add context from previous questions
         context_aware_query = self._add_conversation_context(query)
-        
+
         # Get database results (40%)
         db_results = find_best_answer(context_aware_query, intent_result, previous_suggestions)
-        
-        # Get LLM knowledge (60%)
-        llm_results = self._get_llm_knowledge(context_aware_query, query)
-        
-        # Combine results with weighted scores
-        hybrid_answer = self._combine_results(db_results, llm_results, query)
-        
-        # Store this Q&A in conversation history
-        self._update_conversation_history(query, hybrid_answer)
-        
-        # Generate suggestions using the same FAQ CSV logic as main search
-        suggestions = generate_related_questions(query, [], intent_result, previous_suggestions)
-        
-        return {
-            "answer": hybrid_answer,
-            "suggestions": suggestions,
-            "source_info": {
+        db_answer = db_results.get("answer", "")
+
+        # FOR TIME-SENSITIVE QUERIES: Use web search + database
+        if is_time_sensitive:
+            logger.info(f"⏰ Time-sensitive query detected - using web search")
+            web_result = search_with_web(query, db_answer)
+
+            if web_result.get("web_search_used"):
+                # Web search succeeded - use real-time answer
+                hybrid_answer = web_result["answer"]
+                source_info = {
+                    "hybrid_search": True,
+                    "web_search_enabled": True,
+                    "is_real_time": True,
+                    "source": web_result["source_info"]["source"],
+                    "db_source": db_results.get("source_info", {})
+                }
+            else:
+                # Web search failed - fall back to normal hybrid
+                logger.warning("⚠️ Web search unavailable, using normal hybrid search")
+                llm_results = self._get_llm_knowledge(context_aware_query, query)
+                hybrid_answer = self._combine_results(db_results, llm_results, query)
+                source_info = {
+                    "hybrid_search": True,
+                    "web_search_enabled": False,
+                    "llm_weight": self.llm_weight,
+                    "db_weight": self.db_weight,
+                    "db_source": db_results.get("source_info", {})
+                }
+        else:
+            # NORMAL HYBRID SEARCH: 60% LLM + 40% Database
+            llm_results = self._get_llm_knowledge(context_aware_query, query)
+            hybrid_answer = self._combine_results(db_results, llm_results, query)
+            source_info = {
                 "hybrid_search": True,
+                "web_search_enabled": False,
                 "llm_weight": self.llm_weight,
                 "db_weight": self.db_weight,
                 "db_source": db_results.get("source_info", {})
             }
+
+        # Store this Q&A in conversation history
+        self._update_conversation_history(query, hybrid_answer)
+
+        # Generate suggestions using the same FAQ CSV logic as main search
+        suggestions = generate_related_questions(query, [], intent_result, previous_suggestions)
+
+        return {
+            "answer": hybrid_answer,
+            "suggestions": suggestions,
+            "source_info": source_info
         }
     
     def _add_conversation_context(self, query: str) -> str:

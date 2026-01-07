@@ -15,7 +15,6 @@ from datetime import datetime
 from models import QueryRequest, QueryResponse, UserData
 from search import find_best_answer
 from hybrid_search import find_hybrid_answer
-from sequential_hybrid_search import find_sequential_hybrid_answer
 from search_config import get_search_config, SearchMode
 from llm_refiner import refine_with_gemini
 from collect_data import collect_user_data, get_user_data_from_session, redis_client
@@ -148,10 +147,8 @@ async def handle_query(request: Request, query: QueryRequest):
         search_mode = search_config.get_search_mode()
         
         # Use appropriate search method based on configuration
-        if search_mode == SearchMode.SEQUENTIAL_HYBRID:
-            result = find_sequential_hybrid_answer(query.text, intent_result, previous_suggestions)
-            final_answer = result["answer"]
-        elif search_mode == SearchMode.HYBRID:
+        # Note: SEQUENTIAL_HYBRID currently falls back to regular HYBRID
+        if search_mode == SearchMode.SEQUENTIAL_HYBRID or search_mode == SearchMode.HYBRID:
             result = find_hybrid_answer(query.text, intent_result, previous_suggestions)
             final_answer = result["answer"]
         else:

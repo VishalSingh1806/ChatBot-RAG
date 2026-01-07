@@ -265,50 +265,40 @@ def find_best_answer(user_query: str, intent_result=None, previous_suggestions: 
         }
 
     all_results = []
-    
-    # Query all collections using embedding
-    for collection_name, collection in collections.items():
-        try:
-            results = collection.query(
-                query_embeddings=[query_embedding],
-                n_results=10  # Get more results for better matching
-            )
-            
-            if results['documents'][0]:
-                for i, doc in enumerate(results['documents'][0]):
-                    metadata = results['metadatas'][0][i] if results['metadatas'] else {}
-                    # Fix source fallback
-                    source = metadata.get('source', 'unknown')
-                    if source == 'unknown' or not source:
-                        # Try to extract from collection name or use fallback
-                        if collection_name == 'EPR-chatbot':
-                            source = 'EPR_Knowledge_Base'
-                        elif collection_name == 'producer':
-                            source = 'Producer_Guidelines'
-                        elif collection_name == 'importer':
-                            source = 'Importer_Rules'
-                        elif collection_name == 'branc_owner':
-                            source = 'Brand_Owner_Manual'
-                        else:
-                            source = f'{collection_name}_documents'
-                    
-                    all_results.append({
-                        'document': doc,
-                        'distance': results['distances'][0][i] if results['distances'] else 0,
-                        'collection': collection_name,
-                        'metadata': metadata,
-                        'chunk_id': metadata.get('chunk_id', i),
-                        'source': source,
-                        'pdf_index': metadata.get('pdf_index', 0)
-                    })
-                    
-                logger.info(f"📚 Found {len(results['documents'][0])} results from '{collection_name}' collection")
-                for i, doc in enumerate(results['documents'][0]):
-                    metadata = results['metadatas'][0][i] if results['metadatas'] else {}
-                    distance = results['distances'][0][i] if results['distances'] else 0
-                    logger.info(f"  - Chunk {metadata.get('chunk_id', i)}: distance={distance:.4f}, source={metadata.get('source', 'unknown')}")
-        except Exception as e:
-            logger.error(f"Error querying collection '{collection_name}': {e}")
+
+    # Query the merged collection using embedding
+    try:
+        results = collection.query(
+            query_embeddings=[query_embedding],
+            n_results=10  # Get more results for better matching
+        )
+
+        if results['documents'][0]:
+            for i, doc in enumerate(results['documents'][0]):
+                metadata = results['metadatas'][0][i] if results['metadatas'] else {}
+                # Fix source fallback
+                source = metadata.get('source', 'unknown')
+                if source == 'unknown' or not source:
+                    # Use merged collection as source
+                    source = 'EPR_Knowledge_Base'
+
+                all_results.append({
+                    'document': doc,
+                    'distance': results['distances'][0][i] if results['distances'] else 0,
+                    'collection': COLLECTION_NAME,
+                    'metadata': metadata,
+                    'chunk_id': metadata.get('chunk_id', i),
+                    'source': source,
+                    'pdf_index': metadata.get('pdf_index', 0)
+                })
+
+            logger.info(f"📚 Found {len(results['documents'][0])} results from '{COLLECTION_NAME}' collection")
+            for i, doc in enumerate(results['documents'][0]):
+                metadata = results['metadatas'][0][i] if results['metadatas'] else {}
+                distance = results['distances'][0][i] if results['distances'] else 0
+                logger.info(f"  - Chunk {metadata.get('chunk_id', i)}: distance={distance:.4f}, source={metadata.get('source', 'unknown')}")
+    except Exception as e:
+        logger.error(f"Error querying collection '{COLLECTION_NAME}': {e}")
     
     if not all_results:
         logger.warning("No results found for query")
