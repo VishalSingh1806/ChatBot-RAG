@@ -17,17 +17,11 @@ class SearchMode(Enum):
 class SearchConfig:
     def __init__(self):
         # Default search mode - can be changed via environment variable
-        self.default_mode = SearchMode(os.getenv("SEARCH_MODE", "traditional"))
+        self.default_mode = SearchMode(os.getenv("SEARCH_MODE", "hybrid"))
         
-        # Hybrid search weights
-        self.llm_weight = float(os.getenv("LLM_WEIGHT", "0.6"))  # 60%
-        self.db_weight = float(os.getenv("DB_WEIGHT", "0.4"))    # 40%
-        
-        # Ensure weights sum to 1.0
-        total_weight = self.llm_weight + self.db_weight
-        if total_weight != 1.0:
-            self.llm_weight = self.llm_weight / total_weight
-            self.db_weight = self.db_weight / total_weight
+        # Hybrid search weights - ALWAYS 60% LLM + 40% Database
+        self.llm_weight = 0.6  # Fixed 60%
+        self.db_weight = 0.4   # Fixed 40%
     
     def get_search_mode(self) -> SearchMode:
         """Get the current search mode"""

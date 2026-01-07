@@ -60,7 +60,7 @@ def get_recircle_info(query: str) -> str:
         return "ReCircle specializes in EPR compliance, plastic waste management, and sustainability solutions for businesses across India.\n\nContact us: 9004240004 | info@recircle.in"
 
 def generate_related_questions(user_query: str, search_results: list = None, intent_result=None, previous_suggestions: list = None) -> list:
-    """Generate exactly 3 questions: 2 dynamic + 1 static ReCircle contact question"""
+    """Generate 2 dynamic questions + 1 static ReCircle contact question"""
     query_lower = user_query.lower()
     previous_suggestions = previous_suggestions or []
     

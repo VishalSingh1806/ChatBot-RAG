@@ -11,8 +11,6 @@ from datetime import datetime
 from models import QueryRequest, QueryResponse, UserData
 from search import find_best_answer
 from hybrid_search import find_hybrid_answer
-from sequential_hybrid_search import find_sequential_hybrid_answer
-from search_config import get_search_config, SearchMode
 from llm_refiner import refine_with_gemini
 from collect_data import collect_user_data, get_user_data_from_session, redis_client
 from lead_manager import lead_manager
@@ -137,29 +135,9 @@ async def handle_query(request: Request, query: QueryRequest):
         suggestions_key = f"session:{session_id}:suggestions"
         previous_suggestions = redis_client.lrange(suggestions_key, 0, -1) or []
         
-        # Get search configuration
-        search_config = get_search_config()
-        search_mode = search_config.get_search_mode()
-        
-        # Use appropriate search method based on configuration
-        if search_mode == SearchMode.SEQUENTIAL_HYBRID:
-            result = find_sequential_hybrid_answer(query.text, intent_result, previous_suggestions)
-            final_answer = result["answer"]
-        elif search_mode == SearchMode.HYBRID:
-            result = find_hybrid_answer(query.text, intent_result, previous_suggestions)
-            final_answer = result["answer"]
-        else:
-            # Traditional search with LLM refinement
-            result = find_best_answer(query.text, intent_result, previous_suggestions)
-            final_answer, intent_result, user_context = refine_with_gemini(
-                user_name=user_name,
-                query=query.text,
-                raw_answer=result["answer"],
-                history=history,
-                is_first_message=(len(history) == 0),
-                session_id=session_id,
-                source_info=result.get("source_info", {})
-            )
+        # Always use hybrid search - 60% LLM + 40% Database
+        result = find_hybrid_answer(query.text, intent_result, previous_suggestions)
+        final_answer = result["answer"]
 
         from intent_detector import intent_detector
         engagement_score = intent_detector._calculate_engagement_score(query.text.lower(), history)
