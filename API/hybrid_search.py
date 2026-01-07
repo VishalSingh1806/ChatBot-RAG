@@ -14,376 +14,473 @@ genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
 
 class HybridSearchEngine:
     def __init__(self):
-        self.llm_weight = 0.6  # 60% LLM
-        self.db_weight = 0.4   # 40% Database
         self.model = genai.GenerativeModel("gemini-2.0-flash-exp")
         self.conversation_history = []  # Store last 5 Q&A pairs
+        self.udb_path = r"C:\Users\BHAKTI\OneDrive\Desktop\ReCircle\EPR ChatBot\ChatBot-RAG\UDB\Updated_DB"
     
     def search(self, query: str, intent_result=None, previous_suggestions: list = None) -> Dict:
-        """
-        Hybrid search - LLM FIRST for EPR queries, then supplement with database
-        """
+        """Main hybrid search with DB first, then LLM formatting"""
         logger.info(f"🔄 Hybrid search for: {query[:100]}...")
         
         # Add context from previous questions
         context_aware_query = self._add_conversation_context(query)
         
-        # For EPR queries, get LLM knowledge FIRST (prioritize 60% weight)
-        llm_results = self._get_llm_knowledge(context_aware_query, query)
-        logger.info(f"📝 LLM response length: {len(llm_results) if llm_results else 0}")
+        # Determine query type
+        is_timeline_query = self._is_timeline_query(query)
+        is_epr_recircle_query = self._is_epr_recircle_query(query)
         
-        # Get database results (40% - supplementary)
-        db_results = find_best_answer(context_aware_query, intent_result, previous_suggestions)
+        if is_timeline_query:
+            # Timeline queries: UDB only, then LLM for formatting
+            hybrid_answer = self._handle_timeline_query(context_aware_query, query)
+        elif is_epr_recircle_query:
+            # EPR/ReCircle queries: All DBs first, then LLM
+            hybrid_answer = self._handle_epr_recircle_query(context_aware_query, query, intent_result, previous_suggestions)
+        else:
+            # Generic queries: All DBs first, then LLM
+            hybrid_answer = self._handle_generic_query(context_aware_query, query, intent_result, previous_suggestions)
         
-        # Combine with LLM priority
-        hybrid_answer = self._combine_results_llm_first(db_results, llm_results, query)
-        
-        # Store this Q&A in conversation history
+        # Store in conversation history
         self._update_conversation_history(query, hybrid_answer)
         
-        # Generate suggestions using the same FAQ CSV logic as main search
+        # Generate suggestions
         suggestions = generate_related_questions(query, [], intent_result, previous_suggestions)
         
         return {
             "answer": hybrid_answer,
             "suggestions": suggestions,
-            "source_info": {
-                "hybrid_search": True,
-                "llm_weight": self.llm_weight,
-                "db_weight": self.db_weight,
-                "db_source": db_results.get("source_info", {})
-            }
+            "source_info": {"hybrid_search": True}
         }
     
-    def _add_conversation_context(self, query: str) -> str:
-        """Add context from previous 5 questions to current query"""
-        if not self.conversation_history:
-            return query
+    def _is_timeline_query(self, query: str) -> bool:
+        """Check if query is timeline/deadline related"""
+        timeline_keywords = ['deadline', 'date', 'when', 'timeline', 'filing date', 'due date', 'last date']
+        year_patterns = ['2024-25', '2025-26', '2026-27', '2023-24']
         
-        context = "\n".join([f"Q: {item['question']}\nA: {item['answer'][:100]}..." 
-                            for item in self.conversation_history[-3:]])  # Last 3 for brevity
+        # Check for timeline keywords OR year patterns (for follow-up queries)
+        has_timeline_keywords = any(keyword in query.lower() for keyword in timeline_keywords)
+        has_year_pattern = any(year in query.lower() for year in year_patterns)
         
-        return f"Previous context:\n{context}\n\nCurrent question: {query}"
+        return has_timeline_keywords or has_year_pattern
     
-    def _update_conversation_history(self, question: str, answer: str):
-        """Update conversation history, keeping only last 5 Q&A pairs"""
-        self.conversation_history.append({
-            "question": question,
-            "answer": answer
-        })
-        
-        # Keep only last 5 conversations
-        if len(self.conversation_history) > 5:
-            self.conversation_history = self.conversation_history[-5:]
+    def _is_epr_recircle_query(self, query: str) -> bool:
+        """Check if query is EPR or ReCircle related"""
+        epr_keywords = ['epr', 'recircle', 'plastic', 'waste', 'packaging', 'compliance', 'registration']
+        return any(keyword in query.lower() for keyword in epr_keywords)
     
-    def _get_llm_knowledge(self, context_query: str, original_query: str) -> str:
-        """Get LLM's knowledge about the query with conversation context"""
+    def _handle_timeline_query(self, context_query: str, original_query: str) -> str:
+        """Handle timeline queries: UDB for 2024-25+, All DBs for earlier years"""
+        logger.info("⏰ Timeline query detected")
+        
+        # Check if query is too general
+        if self._is_general_timeline_query(original_query):
+            return "Please specify: Which year (2024-25, 2025-26)? (Note: This chatbot focuses on plastic waste EPR only)"
+        
+        # Check if query is for 2024-25 or onwards
         query_lower = original_query.lower()
+        is_2024_onwards = any(year in query_lower for year in ['2024-25', '2025-26', '2026-27', '202425', '202526', '202627'])
         
-        # Check if this is a deadline-related query - DON'T process here, let _combine_results handle it
-        is_deadline_query = any(keyword in query_lower for keyword in 
-                               ['deadline', 'date', 'when', 'timeline', 'filing date', 'due date', 'last date'])
-        
-        if is_deadline_query:
-            # Return placeholder - actual timeline processing happens in _combine_results_llm_first
-            return "TIMELINE_QUERY_PLACEHOLDER"
+        if is_2024_onwards:
+            # Use UDB only for 2024-25 and onwards
+            logger.info("📅 Using UDB for 2024-25+ timeline query")
+            udb_result = self._search_udb_only(context_query)
+            
+            if udb_result and len(udb_result.strip()) > 10:
+                formatted_answer = self._format_timeline_answer(udb_result, original_query)
+                logger.info("🗄️ Using UDB data with LLM formatting")
+                return formatted_answer
+            
+            return "No plastic waste EPR timeline information found for this year. Please check latest CPCB notifications."
         else:
-            # General prompt for non-deadline queries
+            # Use all databases for earlier years (2023-24 and before)
+            logger.info("📅 Using all databases for pre-2024 timeline query")
+            db_results = find_best_answer(context_query, None, None)
+            db_answer = db_results.get("answer", "")
+            
+            if db_answer and len(db_answer.strip()) > 10:
+                # Calculate relevance
+                similarity = self._calculate_similarity(original_query, db_answer)
+                logger.info(f"📊 DB similarity: {similarity:.2f}")
+                
+                if similarity >= 0.6:
+                    # Use DB data with LLM formatting
+                    formatted_answer = self._format_db_answer_with_llm(db_answer, original_query)
+                    logger.info("🗄️ Using all DB data with LLM formatting")
+                    return formatted_answer
+            
+            # Fallback to LLM for earlier years
+            llm_answer = self._get_llm_answer(original_query)
+            logger.info("🧠 Using LLM response for earlier year")
+            return llm_answer
+    
+    def _handle_epr_recircle_query(self, context_query: str, original_query: str, intent_result, previous_suggestions) -> str:
+        """Handle EPR/ReCircle queries: All DBs first, then LLM"""
+        logger.info("🏢 EPR/ReCircle query - All databases first")
+        
+        # Search all databases first
+        db_results = find_best_answer(context_query, intent_result, previous_suggestions)
+        db_answer = db_results.get("answer", "")
+        
+        if db_answer and len(db_answer.strip()) > 10:
+            # Calculate relevance
+            similarity = self._calculate_similarity(original_query, db_answer)
+            logger.info(f"📊 DB similarity: {similarity:.2f}")
+            
+            if similarity >= 0.6:
+                # Use DB data with LLM formatting
+                formatted_answer = self._format_db_answer_with_llm(db_answer, original_query)
+                logger.info("🗄️ Using DB data (60%+ relevant) with LLM formatting")
+                return formatted_answer
+        
+        # Fallback to LLM
+        llm_answer = self._get_llm_answer(original_query)
+        logger.info("🧠 Using LLM response (DB not relevant enough)")
+        return llm_answer
+    
+    def _handle_generic_query(self, context_query: str, original_query: str, intent_result, previous_suggestions) -> str:
+        """Handle generic queries: All DBs first, then LLM"""
+        logger.info("❓ Generic query - All databases first")
+        
+        # Search all databases first
+        db_results = find_best_answer(context_query, intent_result, previous_suggestions)
+        db_answer = db_results.get("answer", "")
+        
+        if db_answer and len(db_answer.strip()) > 10:
+            # Calculate relevance
+            similarity = self._calculate_similarity(original_query, db_answer)
+            logger.info(f"📊 DB similarity: {similarity:.2f}")
+            
+            if similarity >= 0.6:
+                # Use DB data with LLM formatting
+                formatted_answer = self._format_db_answer_with_llm(db_answer, original_query)
+                logger.info("🗄️ Using DB data (60%+ relevant) with LLM formatting")
+                return formatted_answer
+        
+        # Fallback to LLM
+        llm_answer = self._get_llm_answer(original_query)
+        logger.info("🧠 Using LLM response (DB not relevant enough)")
+        return llm_answer
+    
+    def _is_general_timeline_query(self, query: str) -> bool:
+        """Check if timeline query is too general and needs specificity"""
+        query_lower = query.lower()
+        has_specific_year = any(year in query_lower for year in ['2024-25', '2025-26', '2026-27', '2023-24'])
+        has_specific_type = any(word in query_lower for word in ['plastic', 'packaging', 'state', 'pro'])
+        
+        return len(query.split()) <= 6 and not has_specific_year and not has_specific_type
+    
+    def _search_udb_only(self, query: str) -> str:
+        """Search only UDB database for timeline queries"""
+        logger.info(f"🔍 Searching UDB for query: {query}")
+        logger.info(f"📁 UDB path: {self.udb_path}")
+        
+        try:
+            import chromadb
+            import google.generativeai as genai
+            from chromadb import EmbeddingFunction
+            
+            class GeminiEmbeddingFunction(EmbeddingFunction):
+                def __call__(self, input):
+                    embeddings = []
+                    for text in input:
+                        result = genai.embed_content(
+                            model="models/text-embedding-004",
+                            content=text
+                        )
+                        embeddings.append(result['embedding'])
+                    return embeddings
+            
+            client = chromadb.PersistentClient(path=self.udb_path)
+            logger.info(f"✅ Connected to UDB client")
+            
+            collection = client.get_collection(
+                name="updated_db",
+                embedding_function=GeminiEmbeddingFunction()
+            )
+            logger.info(f"✅ Got UDB collection with {collection.count()} documents")
+            
+            results = collection.query(
+                query_texts=[query],
+                n_results=3
+            )
+            logger.info(f"📊 UDB query returned {len(results['documents'][0]) if results['documents'] and results['documents'][0] else 0} results")
+            
+            if results['documents'] and results['documents'][0]:
+                # Log first result for debugging
+                first_result = results['documents'][0][0][:200] if results['documents'][0] else "No results"
+                logger.info(f"📄 First UDB result: {first_result}...")
+                
+                # Combine top results
+                combined_result = " ".join(results['documents'][0][:2])
+                return self._clean_text(combined_result)
+            else:
+                logger.warning("⚠️ No documents found in UDB results")
+            
+        except Exception as e:
+            logger.error(f"❌ UDB search failed: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+        
+        return ""
+    
+    def _format_timeline_answer(self, udb_data: str, query: str) -> str:
+        """Use LLM to format UDB timeline data professionally"""
+        requested_year = self._get_requested_year(query)
+        
+        # Pre-check: If asking for 2025-26 or 2026-27, return no info message directly
+        if requested_year in ['2025-26', '2026-27']:
+            return f"No specific filing deadline available for FY {requested_year}. Please check latest CPCB notifications."
+        
+        # Only process if asking for 2024-25 or if year matches data
+        if requested_year == '2024-25':
             prompt = f"""
-            You are an EPR compliance expert with specific knowledge of Indian EPR regulations. Answer this query:
+            Extract the deadline date for FY 2024-25 ONLY:
             
-            Query: {original_query}
-            
-            SPECIFIC EPR PLASTIC WASTE CATEGORIES (if asked about categories):
-            - C1: Rigid plastic packaging (bottles, containers, trays)
-            - C2: Flexible plastic packaging (pouches, films, wrappers)
-            - C3: Multi-layered plastic packaging (composite materials)
-            - C4: Plastic sheets and carry bags
+            Database Info: {udb_data}
+            User Query: {query}
             
             Instructions:
-            - Write in natural, professional language
-            - Start directly with the answer - NO introductions
-            - For categories/lists, use numbered format: "1. ", "2. ", etc.
-            - Put each category on a new line
-            - Keep each point concise and clear
-            - Use normal sentence case, not ALL CAPS
-            - Be specific and accurate about EPR regulations
-            - Answer ONLY what is asked
-            - Format as clean numbered list, not paragraphs or bullet points
+            - Extract deadline ONLY if it's for FY 2024-25
+            - Format: "The annual report filing deadline for FY 2024-25 is [DATE]."
+            - If no 2024-25 deadline found, say "No specific deadline found"
+            - Keep response under 20 words
             """
+            
+            try:
+                generation_config = genai.types.GenerationConfig(
+                    temperature=0.1,
+                    top_p=0.8,
+                    max_output_tokens=40
+                )
+                response = self.model.generate_content(prompt, generation_config=generation_config)
+                return self._clean_text(response.text.strip())
+            except Exception as e:
+                logger.error(f"Timeline formatting failed: {e}")
+                return self._extract_deadline_from_text(udb_data, requested_year)
         
-        try:
-            generation_config = genai.types.GenerationConfig(
-                temperature=0.1,
-                top_p=0.8,
-                max_output_tokens=300  # Increased for complete responses
-            )
-            response = self.model.generate_content(prompt, generation_config=generation_config)
-            return response.text.strip()
-        except Exception as e:
-            logger.error(f"LLM knowledge generation failed: {e}")
-            return "LLM knowledge unavailable for this query."
+        # For any other year, return no info message
+        return f"No specific filing deadline available for FY {requested_year}. Please check latest CPCB notifications."
     
-    def _get_timeline_response(self, query: str) -> str:
-        """Get timeline/deadline response directly from LLM with latest info"""
-        logger.info(f"🚀 CALLING _get_timeline_response with query: {query}")
-        
+    def _format_db_answer_with_llm(self, db_answer: str, query: str) -> str:
+        """Use LLM to format database answer"""
         prompt = f"""
-        You are an EPR compliance expert with access to the LATEST 2024-2025 EPR notifications and extensions. Answer this plastic waste EPR deadline query:
+        Format this database information into a clear, specific answer:
         
-        Query: {query}
-        
-        IMPORTANT: Use your most recent knowledge about EPR plastic waste deadlines for 2024-25. There have been extensions beyond the standard June 30 deadline.
+        Database Info: {db_answer}
+        User Query: {query}
         
         Instructions:
-        - Provide the CURRENT extended deadline for plastic waste EPR 2024-25
-        - Include any recent extensions or changes from CPCB
-        - Keep response SHORT (1-2 sentences maximum)
-        - Focus ONLY on plastic waste EPR deadlines
-        - Give the most up-to-date information available
-        """
-        
-        try:
-            logger.info(f"📤 Sending prompt to LLM: {prompt[:200]}...")
-            generation_config = genai.types.GenerationConfig(
-                temperature=0.1,
-                top_p=0.8,
-                max_output_tokens=100
-            )
-            response = self.model.generate_content(prompt, generation_config=generation_config)
-            llm_response = response.text.strip()
-            logger.info(f"📥 LLM returned: {llm_response[:200]}...")
-            return llm_response
-        except Exception as e:
-            logger.error(f"❌ Timeline LLM response failed: {e}")
-            return "Please check the latest EPR notifications for current deadline information."
-    
-    def _get_timeline_response_knowledge_based(self, query: str) -> str:
-        """Get timeline response using LLM's training knowledge"""
-        logger.info(f"🚀 CALLING knowledge-based timeline response for: {query}")
-        
-        prompt = f"""
-        You are an EPR expert. Provide the plastic waste EPR deadline for this query:
-        
-        Query: {query}
-        
-        Based on EPR patterns:
-        - 2024-25 deadline: Extended to November 30, 2025
-        - 2025-26 deadline: June 30, 2026 (standard pattern)
-        - 2026-27 deadline: June 30, 2027 (standard pattern)
-        
-        Instructions:
-        - Give the specific deadline date for the year asked
-        - Keep response SHORT (maximum 10 words)
-        - Format: "The deadline is [DATE]"
-        - Use established EPR deadline patterns
+        - Keep response under 100 words
+        - Be specific and accurate
+        - For multiple points, use numbered format: "1. Point one\n2. Point two\n3. Point three"
+        - NO markdown formatting (no **, -, •)
+        - Remove irrelevant information
+        - Start directly with the answer
+        - Use plain text with proper line breaks for readability
         """
         
         try:
             generation_config = genai.types.GenerationConfig(
                 temperature=0.1,
                 top_p=0.8,
-                max_output_tokens=25
+                max_output_tokens=150
             )
             response = self.model.generate_content(prompt, generation_config=generation_config)
-            return response.text.strip()
+            formatted_response = self._format_for_chat_ui(response.text.strip())
+            return self._clean_text(formatted_response)
         except Exception as e:
-            logger.error(f"❌ Knowledge-based timeline failed: {e}")
-            return "EPR annual filing deadline is typically June 30 of the following year. Please check CPCB notifications for current extensions."
+            logger.error(f"DB formatting failed: {e}")
+            return self._clean_text(db_answer)[:200]
     
-    def _calculate_similarity(self, query: str, db_answer: str) -> float:
-        """Calculate similarity between query and database answer using Jaccard similarity"""
-        if not query or not db_answer:
+    def _get_llm_answer(self, query: str) -> str:
+        """Get direct LLM answer for queries without relevant DB data"""
+        prompt = f"""
+        Answer this EPR compliance question concisely:
+        
+        Query: {query}
+        
+        Instructions:
+        - Keep response under 80 words
+        - Be specific and accurate
+        - For multiple points, use numbered format: "1. Point one\n2. Point two\n3. Point three"
+        - NO markdown formatting (no **, -, •)
+        - Focus on Indian EPR regulations
+        - Start directly with the answer
+        - Use plain text with proper line breaks for readability
+        """
+        
+        try:
+            generation_config = genai.types.GenerationConfig(
+                temperature=0.1,
+                top_p=0.8,
+                max_output_tokens=120
+            )
+            response = self.model.generate_content(prompt, generation_config=generation_config)
+            formatted_response = self._format_for_chat_ui(response.text.strip())
+            return self._clean_text(formatted_response)
+        except Exception as e:
+            logger.error(f"LLM answer failed: {e}")
+            return "Unable to provide specific information. Please check official CPCB notifications."
+    
+    def _get_requested_year(self, query: str) -> str:
+        """Extract requested year from query"""
+        query_lower = query.lower()
+        if '2024-25' in query_lower or '202425' in query_lower:
+            return '2024-25'
+        elif '2025-26' in query_lower or '202526' in query_lower:
+            return '2025-26'
+        elif '2026-27' in query_lower or '202627' in query_lower:
+            return '2026-27'
+        return None
+    
+    def _extract_deadline_from_text(self, text: str, requested_year: str = None) -> str:
+        """Extract deadline information from text"""
+        import re
+        
+        clean_text = self._clean_text(text)
+        
+        # Based on UDB analysis, only 2024-25 has a specific deadline
+        if requested_year == '2025-26':
+            return f"No specific filing deadline available for FY {requested_year}. Please check latest CPCB notifications."
+        elif requested_year == '2026-27':
+            return f"No specific filing deadline available for FY {requested_year}. Please check latest CPCB notifications."
+        
+        # For 2024-25, extract the deadline
+        if requested_year == '2024-25':
+            # Look for the specific deadline in the text
+            if '31 January 2026' in clean_text:
+                return "The annual report filing deadline for FY 2024-25 is 31 January 2026."
+        
+        # General date pattern extraction
+        date_patterns = [
+            r'deadline.*?is\s+([0-9]{1,2}\s+[A-Za-z]+\s+[0-9]{4})',
+            r'by\s+([0-9]{1,2}\s+[A-Za-z]+\s+[0-9]{4})',
+            r'([0-9]{1,2}\s+[A-Za-z]+\s+[0-9]{4})'
+        ]
+        
+        for pattern in date_patterns:
+            match = re.search(pattern, clean_text, re.IGNORECASE)
+            if match:
+                if requested_year:
+                    return f"The annual report filing deadline for FY {requested_year} is {match.group(1)}."
+                else:
+                    return f"The annual report filing deadline is {match.group(1)}."
+        
+        # If no specific date found
+        if requested_year and requested_year != '2024-25':
+            return f"No specific filing deadline available for FY {requested_year}. Please check latest CPCB notifications."
+        
+        return "No specific deadline information found."
+    
+    def _calculate_similarity(self, query: str, answer: str) -> float:
+        """Calculate similarity between query and answer"""
+        if not query or not answer:
             return 0.0
         
         query_words = set(query.lower().split())
-        answer_words = set(db_answer.lower().split())
+        answer_words = set(answer.lower().split())
         
         if not query_words:
             return 0.0
         
-        # Calculate Jaccard similarity
         intersection = len(query_words.intersection(answer_words))
         union = len(query_words.union(answer_words))
         
         return intersection / union if union > 0 else 0.0
     
-    def _combine_results_llm_first(self, db_results: Dict, llm_knowledge: str, query: str) -> str:
-        """Smart combination: Use DB only if 80% similar, otherwise use LLM"""
-        db_answer = db_results.get("answer", "")
-        query_lower = query.lower()
+    def _add_conversation_context(self, query: str) -> str:
+        """Add context from last 5 conversations for follow-up queries"""
+        if not self.conversation_history:
+            return query
         
-        # Debug logging
-        logger.info(f"🔍 Query: {query}")
-        logger.info(f"📊 LLM response: {llm_knowledge[:100] if llm_knowledge else 'None'}...")
-        logger.info(f"🗄️ DB response: {db_answer[:100] if db_answer else 'None'}...")
+        query_lower = query.lower().strip()
         
-        # 1. ReCircle contact queries - DATABASE first
-        is_contact_query = any(keyword in query_lower for keyword in 
-                              ['address', 'contact', 'phone', 'email', 'office', 'location', 'visit', 'call'])
-        is_recircle_mentioned = 'recircle' in query_lower
-        
-        if is_recircle_mentioned and is_contact_query:
-            if db_answer and len(db_answer.strip()) > 10:
-                logger.info(f"📞 Using DB for ReCircle contact")
-                return self._clean_text(db_answer)
-            elif llm_knowledge and len(llm_knowledge.strip()) > 5:
-                logger.info(f"📞 Fallback to LLM for ReCircle contact")
-                return self._clean_text(llm_knowledge)
-        
-        # 2. Deadline/Timeline queries - Check if specific or generic
-        is_deadline_query = any(keyword in query_lower for keyword in 
-                               ['deadline', 'date', 'when', 'timeline', 'filing date', 'due date', 'last date'])
-        
-        # Check if this is a follow-up year specification (short response like "2025-26" or "for 2024-25")
-        is_year_followup = (len(query.split()) <= 3) and \
-                          any(year in query_lower for year in ['2024-25', '2025-26', '2026-27', '2023-24', '2024', '2025', '2026', '2027'])
-        
-        # Check if query mentions specific year or is a follow-up
-        has_specific_year = any(year in query_lower for year in ['2024', '2025', '2026', '2027', '2023'])
-        
-        # Check if any of the last 5 questions was about deadlines
-        previous_was_deadline = False
-        last_deadline_question = ""
-        if self.conversation_history and is_year_followup:
-            # Check last 5 questions for deadline context
-            for i in range(min(5, len(self.conversation_history))):
-                past_question = self.conversation_history[-(i+1)]['question'].lower()
-                if any(keyword in past_question for keyword in 
-                      ['deadline', 'date', 'when', 'timeline', 'filing date', 'due date']):
-                    previous_was_deadline = True
-                    last_deadline_question = self.conversation_history[-(i+1)]['question']
-                    break
-        
-        if is_deadline_query or is_year_followup:
-            # ALWAYS use LLM DIRECTLY for timeline queries - NO DB check
-            logger.info(f"⏰ DETECTED timeline query - using LLM DIRECTLY (no DB check)")
+        # Check if this is a year follow-up (like "2024-25")
+        import re
+        year_pattern = r'^(202[3-9]-[0-9]{2})$'
+        if re.match(year_pattern, query_lower):
+            # Look for previous deadline/filing questions
+            for prev_item in reversed(self.conversation_history[-3:]):
+                prev_query = prev_item['question'].lower()
+                if any(keyword in prev_query for keyword in ['deadline', 'filing', 'date', 'annual', 'report']):
+                    # Combine with plastic waste context
+                    enhanced = f"plastic waste EPR annual report filing deadline for {query}"
+                    logger.info(f"🔗 Enhanced year query: '{enhanced}'")
+                    return enhanced
             
-            if is_year_followup and previous_was_deadline:
-                combined_query = f"{last_deadline_question} {query}"
-                logger.info(f"📅 Combined timeline query: {combined_query}")
-                timeline_response = self._get_timeline_response_knowledge_based(combined_query)
-            elif has_specific_year or is_deadline_query:
-                logger.info(f"📅 Direct timeline query: {query}")
-                timeline_response = self._get_timeline_response_knowledge_based(query)
-            else:
-                logger.info(f"❓ Generic deadline query - asking for specifics")
-                return "Could you please specify the exact year? For example: 'What is the deadline for annual report filing for 2024-25?' This will help me provide you with the accurate date."
-            
-            logger.info(f"✅ Timeline response generated: {timeline_response[:100]}...")
-            return self._clean_text(timeline_response)
+            # If no previous context, still add plastic waste context for year queries
+            enhanced = f"plastic waste EPR annual report filing deadline for {query}"
+            logger.info(f"🔗 Added plastic waste context to year query: '{enhanced}'")
+            return enhanced
         
-        # 3. EPR queries - Check DB similarity first (80% threshold)
-        is_epr_query = any(keyword in query_lower for keyword in 
-                          ['epr', 'filing', 'annual', 'return', 'compliance', 'registration', 'waste', 'categories', 'plastic'])
+        # For other follow-up patterns
+        follow_up_patterns = [r'^for (202[3-9]-[0-9]{2})', r'^what about', r'^and (202[3-9]-[0-9]{2})']
+        is_follow_up = any(re.match(pattern, query_lower) for pattern in follow_up_patterns)
         
-        if is_epr_query and db_answer and len(db_answer.strip()) > 10:
-            similarity = self._calculate_similarity(query, db_answer)
-            logger.info(f"📈 DB similarity score: {similarity:.2f}")
-            
-            # If similarity is 80% or higher, combine DB + LLM
-            if similarity >= 0.8:
-                logger.info(f"🔄 Combining DB + LLM (high similarity: {similarity:.2f})")
-                combined_answer = self._combine_db_and_llm(db_answer, llm_knowledge, query)
-                return self._clean_text(combined_answer)
-            else:
-                logger.info(f"⚠️ DB similarity too low ({similarity:.2f}), using LLM only")
-                if llm_knowledge and len(llm_knowledge.strip()) > 5:
-                    return self._clean_text(llm_knowledge)
+        if is_follow_up and self.conversation_history:
+            last_question = self.conversation_history[-1]['question']
+            # Add plastic waste context for EPR queries
+            if any(keyword in last_question.lower() for keyword in ['deadline', 'filing', 'epr']):
+                combined = f"plastic waste EPR {last_question} {query}"
+                logger.info(f"🔗 Enhanced follow-up: '{combined}'")
+                return combined
         
-        # 4. All other queries - LLM first
-        if llm_knowledge and len(llm_knowledge.strip()) > 10:
-            logger.info(f"✅ Using LLM for general query")
-            return self._clean_text(llm_knowledge)
-        
-        # Final fallback to database
-        if db_answer and len(db_answer.strip()) > 10:
-            logger.info(f"⚠️ Final fallback to DB")
-            return self._clean_text(db_answer)
-        
-        return "I don't have sufficient information to answer this query."
+        return query
     
-    def _combine_db_and_llm(self, db_answer: str, llm_knowledge: str, query: str) -> str:
-        """Combine database and LLM knowledge for comprehensive answer"""
-        prompt = f"""
-        Create a professional, comprehensive answer by combining these sources:
+    def _update_conversation_history(self, question: str, answer: str):
+        """Maintain last 5 Q&A pairs"""
+        self.conversation_history.append({
+            "question": question,
+            "answer": answer
+        })
         
-        DATABASE INFORMATION:
-        {db_answer}
+        if len(self.conversation_history) > 5:
+            self.conversation_history = self.conversation_history[-5:]
+    
+    def _format_for_chat_ui(self, text: str) -> str:
+        """Format text specifically for chat UI with proper line breaks"""
+        if not text:
+            return ""
         
-        LLM KNOWLEDGE:
-        {llm_knowledge}
+        import re
         
-        USER QUERY: {query}
+        # Convert numbered lists to proper format with line breaks
+        # Pattern: "1. text 2. text 3. text" -> "1. text\n2. text\n3. text"
+        text = re.sub(r'(\d+\.)\s*([^\d]*?)(?=\s*\d+\.|$)', r'\1 \2\n', text)
         
-        Instructions:
-        - Combine both sources to create one comprehensive answer
-        - Start directly with the answer - NO introductions
-        - Preserve original formatting from database (numbered lists, bullet points)
-        - Keep the exact structure and formatting as provided
-        - Ensure accuracy by prioritizing database facts
-        - Don't modify the formatting style of structured content
-        - Maintain numbered questions and detailed answers format
-        """
+        # Clean up any trailing newlines and extra spaces
+        text = re.sub(r'\n+$', '', text)
+        text = re.sub(r'\s+', ' ', text)
+        text = text.replace('\n ', '\n')
         
-        try:
-            generation_config = genai.types.GenerationConfig(
-                temperature=0.1,
-                top_p=0.8,
-                max_output_tokens=300
-            )
-            response = self.model.generate_content(prompt, generation_config=generation_config)
-            return response.text.strip()
-        except Exception as e:
-            logger.error(f"DB+LLM combination failed: {e}")
-            # Fallback to database answer
-            return db_answer
+        return text.strip()
     
     def _clean_text(self, text: str) -> str:
-        """Clean HTML entities and format text professionally"""
+        """Clean text for chat UI display"""
         if not text:
             return ""
         
-        # Clean HTML entities
-        text = text.replace("&quot;", '"').replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+        import re
         
-        # Format text professionally
-        text = self._format_professional_text(text)
+        # Remove HTML entities
+        text = text.replace("&quot;", '"').replace("&amp;", "&")
+        text = text.replace("&lt;", "<").replace("&gt;", ">")
+        
+        # Remove markdown formatting
+        text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)  # Remove **bold**
+        text = re.sub(r'\*(.*?)\*', r'\1', text)      # Remove *italic*
+        text = re.sub(r'`(.*?)`', r'\1', text)        # Remove `code`
+        text = re.sub(r'#{1,6}\s*', '', text)         # Remove headers
+        text = re.sub(r'^[-\*\+•]\s+', '', text, flags=re.MULTILINE)  # Remove bullet points
+        
+        # Preserve numbered list formatting but clean up extra spaces
+        text = re.sub(r'\n\s*\n\s*\n', '\n\n', text)  # Remove excessive newlines
+        text = re.sub(r'[ \t]+', ' ', text)          # Clean up spaces but keep newlines
         
         return text.strip()
-    
-    def _format_professional_text(self, text: str) -> str:
-        """Format text to preserve original structure while cleaning up"""
-        if not text:
-            return ""
-        
-        # Clean HTML entities but preserve structure
-        text = text.replace("&amp;", "&").replace("&quot;", '"').replace("&lt;", "<").replace("&gt;", ">")
-        
-        # Preserve numbered lists and bullet points as they are
-        # Don't modify capitalization for structured content
-        return text.strip()
-    
-    def _fallback_combination(self, db_answer: str, llm_knowledge: str) -> str:
-        """Simple fallback combination if LLM combination fails"""
-        if not db_answer and not llm_knowledge:
-            return "I don't have sufficient information to answer this query."
-        
-        # Prioritize LLM knowledge (60% weight)
-        if llm_knowledge and len(llm_knowledge.strip()) > 20:
-            return llm_knowledge
-        
-        if db_answer and len(db_answer.strip()) > 20:
-            return db_answer
-        
-        # Return whatever we have
-        return llm_knowledge or db_answer or "I don't have sufficient information to answer this query."
 
 # Global instance
 hybrid_search_engine = HybridSearchEngine()
 
 def find_hybrid_answer(query: str, intent_result=None, previous_suggestions: list = None) -> Dict:
-    """
-    Main function to get hybrid search results
-    """
+    """Main entry point for hybrid search"""
     return hybrid_search_engine.search(query, intent_result, previous_suggestions)
