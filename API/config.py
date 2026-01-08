@@ -9,12 +9,15 @@ load_dotenv()
 # Get base directory (API folder)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# ChromaDB Configuration - All 5 databases
-CHROMA_DB_PATH_1 = os.getenv("CHROMA_DB_PATH_1", r"C:\Users\BHAKTI\OneDrive\Desktop\ReCircle\EPR ChatBot\chromaDB")
-CHROMA_DB_PATH_2 = os.getenv("CHROMA_DB_PATH_2", r"C:\Users\BHAKTI\OneDrive\Desktop\ReCircle\EPR ChatBot\chromaDB1")
-CHROMA_DB_PATH_3 = os.getenv("CHROMA_DB_PATH_3", r"C:\Users\BHAKTI\OneDrive\Desktop\ReCircle\EPR ChatBot\DB1")
-CHROMA_DB_PATH_4 = os.getenv("CHROMA_DB_PATH_4", r"C:\Users\BHAKTI\OneDrive\Desktop\ReCircle\EPR ChatBot\ChatBot-RAG\UDB\Updated_DB")
-CHROMA_DB_PATH_5 = os.getenv("CHROMA_DB_PATH_5", r"C:\Users\BHAKTI\OneDrive\Desktop\ReCircle\EPR ChatBot\ChatBot-RAG\Updated_DB\Updated_DB")
+# ChromaDB Configuration - All 5 databases from local folder
+DB_FOLDER = os.path.join(BASE_DIR, "chroma_db", "drive-download-20260108T065146Z-3-001")
+
+CHROMA_DB_PATH_1 = os.getenv("CHROMA_DB_PATH_1", os.path.join(DB_FOLDER, "chromaDB"))
+CHROMA_DB_PATH_2 = os.getenv("CHROMA_DB_PATH_2", os.path.join(DB_FOLDER, "chromaDB1"))
+CHROMA_DB_PATH_3 = os.getenv("CHROMA_DB_PATH_3", os.path.join(DB_FOLDER, "DB1"))
+CHROMA_DB_PATH_4 = os.getenv("CHROMA_DB_PATH_4", os.path.join(DB_FOLDER, "UDB", "Updated_DB"))
+CHROMA_DB_PATH_5 = os.getenv("CHROMA_DB_PATH_5", os.path.join(DB_FOLDER, "Updated_DB", "Updated_DB"))
+
 
 CHROMA_DB_PATHS = [CHROMA_DB_PATH_1, CHROMA_DB_PATH_2, CHROMA_DB_PATH_3, CHROMA_DB_PATH_4, CHROMA_DB_PATH_5]
 
@@ -33,9 +36,5 @@ PDF_DOCUMENTS_PATH = os.getenv("PDF_DOCUMENTS_PATH", os.path.join(BASE_DIR, ".."
 # Reports output directory
 REPORTS_OUTPUT_DIR = os.getenv("REPORTS_OUTPUT_DIR", os.path.join(BASE_DIR, "reports"))
 
-# Ensure the ChromaDB directories exist
-for path in CHROMA_DB_PATHS:
-    os.makedirs(path, exist_ok=True)
-
-# Ensure reports directory exists
+# Ensure reports directory exists (ChromaDB directories already exist in the folder)
 os.makedirs(REPORTS_OUTPUT_DIR, exist_ok=True)
