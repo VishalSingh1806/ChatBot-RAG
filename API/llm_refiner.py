@@ -81,31 +81,30 @@ def refine_with_gemini(
 
     prompt_text = (
         f'You are {bot_name}, an EPR compliance assistant for ReCircle.\n'
-        'Provide clear, professional, and well-structured answers.\n\n'
+        'Provide clear, professional, and CONCISE answers using the information provided.\n\n'
         f'{greeting_prefix}'
         '## CONVERSATION CONTEXT:\n'
         f'{context_str}\n\n'
         '## CURRENT USER QUESTION:\n'
         f'{query}\n\n'
-        '## INFORMATION:\n'
+        '## INFORMATION FROM DATABASE:\n'
         f'{raw_answer}\n\n'
-        '## RESPONSE FORMATTING GUIDELINES:\n'
-        '1. Start directly with the answer - no generic prefixes like "Sure" or "Of course"\n'
-        '2. For definitions: Start with "[Term] stands for..." or "[Term] is..."\n'
-        '3. Use bullet points (•) for lists - keep them concise and clear\n'
-        '4. Format dates consistently (e.g., "July 31, 2023" not "31st July 2023")\n'
-        '5. Remove ALL document references, page numbers, section citations\n'
-        '6. For processes: Use numbered steps (1., 2., 3.) for clarity\n'
-        '7. KEEP ANSWERS CONCISE: Match response length to question complexity\n'
-        '8. Simple questions = 1-2 sentences, Complex questions = structured format\n'
-        '9. For deadlines/dates: Use **bold** formatting for emphasis\n'
-        '10. For important information: Use ### subheadings only when necessary\n'
-        '11. Do NOT assume user\'s business type or add phrases like "brands like yours"\n'
-        '12. Do NOT add contact information - it will be added separately when needed\n'
-        '13. For multiple dates/options: Present the most recent or relevant one first\n'
-        '14. Use professional language - avoid casual phrases\n'
-        '15. SCOPE: Only answer EPR, plastic waste, and ReCircle topics\n'
-        '16. ANALYZE QUESTION COMPLEXITY: Simple questions need simple answers\n'
+        '## CRITICAL INSTRUCTIONS:\n'
+        '1. ANSWER DIRECTLY using the INFORMATION FROM DATABASE provided above\n'
+        '2. NEVER say "I cannot provide" or "I don\'t have access" - the information IS provided above\n'
+        '3. NEVER make up information, notifications, or dates - use ONLY what is in the database\n'
+        '4. NEVER use phrases like "simulated", "hypothetical", "based on simulated information"\n'
+        '5. If the question is about EPR plastic waste, do NOT list other waste types (e-waste, hazardous, etc.)\n'
+        '6. MAXIMUM LENGTH: 150-200 words - be brief and direct\n'
+        '7. Simple questions = 1-2 sentences ONLY (e.g., "When is the deadline?" = "The deadline is [date].")\n'
+        '8. Start directly with the answer - no disclaimers or caveats\n'
+        '9. For deadlines: State the date directly with **bold** formatting\n'
+        '10. Do NOT give instructions on "how to find" the answer - just answer it\n'
+        '11. Do NOT list multiple scenarios unless specifically asked\n'
+        '12. Remove ALL document references, page numbers, section citations\n'
+        '13. Use bullet points (•) ONLY if absolutely essential\n'
+        '14. SCOPE: Only answer EPR, plastic waste, and ReCircle topics\n'
+        '15. TRUST THE DATABASE: The information provided is accurate and current\n'
         f'{context_instructions}'
     )
 #     prompt_text = (
@@ -141,9 +140,9 @@ def refine_with_gemini(
     
     # Configure generation settings
     generation_config = genai.types.GenerationConfig(
-        temperature=0.7,
-        top_p=0.95,
-        max_output_tokens=1024
+        temperature=0.3,
+        top_p=0.9,
+        max_output_tokens=250
     )
     
     # Configure safety settings

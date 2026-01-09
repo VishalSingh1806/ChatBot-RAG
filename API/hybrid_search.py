@@ -161,26 +161,29 @@ Enhanced Query:"""
     def _get_llm_knowledge(self, context_query: str, original_query: str) -> str:
         """Get LLM's knowledge about the query with conversation context"""
         prompt = f"""
-        As an EPR compliance expert, answer this query directly without introductions:
-        
+        As an EPR compliance expert, answer this query directly:
+
         {context_query if len(self.conversation_history) > 0 else f"Query: {original_query}"}
-        
-        Instructions:
-        - Start directly with the answer - NO introductions or overviews
-        - Provide specific, actionable information
-        - Use proper formatting (headings, bullet points) when helpful
-        - Be comprehensive but focused
-        - Clean up HTML entities
-        - Answer exactly what was asked
-        
-        Provide a direct, well-formatted answer:
+
+        CRITICAL RULES:
+        - Answer directly - NO "I don't have access" or disclaimers
+        - NEVER make up dates, notifications, or information
+        - NEVER use "simulated", "hypothetical", or "based on"
+        - If about EPR plastic waste, do NOT mention e-waste, hazardous waste, etc.
+        - KEEP IT SHORT: Maximum 100-150 words
+        - Simple questions = 1-2 sentence answers ONLY
+        - Start with the answer immediately
+        - No bullet points unless essential
+        - Use only factual information you know
+
+        Provide a direct, concise, factual answer:
         """
         
         try:
             generation_config = genai.types.GenerationConfig(
-                temperature=0.1,
-                top_p=0.8,
-                max_output_tokens=800  # Increased for better formatted responses
+                temperature=0.2,
+                top_p=0.85,
+                max_output_tokens=200  # Limit to 100-150 words
             )
             response = self.model.generate_content(prompt, generation_config=generation_config)
             return response.text.strip()
@@ -225,33 +228,36 @@ Enhanced Query:"""
         else:
             # Regular 60% LLM, 40% Database for other queries
             combination_prompt = f"""
-            Create a direct answer using these sources - NO introductions:
-            
+            Create a direct answer using these sources:
+
             LLM KNOWLEDGE (60% weight):
             {llm_knowledge}
-            
+
             DATABASE KNOWLEDGE (40% weight):
             {db_answer}
-            
+
             USER QUERY: {query}
-            
-            Instructions:
-            1. Start directly with the answer - NO "Here's" or "Overview" introductions
-            2. Prioritize LLM knowledge (60%) as primary source
-            3. Use database information (40%) to supplement
-            4. Use proper formatting (headings, bullet points) when helpful
-            5. Be comprehensive but focused on the specific question
-            6. Clean up HTML entities (&quot; &amp; etc.)
-            7. Answer exactly what was asked
-            
-            Provide a direct, well-formatted answer:
+
+            CRITICAL RULES:
+            1. Answer directly - NO disclaimers or "I cannot provide"
+            2. NEVER invent dates, notifications, or information not in the sources above
+            3. NEVER use "simulated", "hypothetical", "based on simulated"
+            4. If asking about EPR plastic waste, do NOT list other waste types
+            5. MAXIMUM: 100-150 words total
+            6. Simple questions = 1-2 sentences ONLY (e.g., "deadline is [date]")
+            7. Trust the sources provided - they are accurate
+            8. Use database dates and facts as-is without modification
+            9. No bullet lists unless specifically needed
+            10. Clean up HTML entities (&quot; &amp; etc.)
+
+            Provide a direct, concise, factual answer:
             """
         
         try:
             generation_config = genai.types.GenerationConfig(
-                temperature=0.1,
-                top_p=0.8,
-                max_output_tokens=1000  # Increased for comprehensive responses
+                temperature=0.2,
+                top_p=0.85,
+                max_output_tokens=200  # Limit to 100-150 words
             )
             response = self.model.generate_content(combination_prompt, generation_config=generation_config)
             return response.text.strip()
