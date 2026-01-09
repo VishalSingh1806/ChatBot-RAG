@@ -5,7 +5,7 @@ import logging
 import csv
 import random
 from dotenv import load_dotenv
-from config import CHROMA_DB_PATH, COLLECTION_NAME
+from config import CHROMA_DB_PATHS, COLLECTIONS
 
 # Load environment variables
 load_dotenv()
@@ -14,31 +14,34 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize ChromaDB client for the merged database
-try:
-    client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
-    logger.info(f"✅ Connected to merged ChromaDB at {CHROMA_DB_PATH}")
-except Exception as e:
-    logger.error(f"❌ Failed to connect to ChromaDB: {e}")
-    client = None
+# Initialize ChromaDB clients for ALL 5 databases
+clients = {}
+for db_path in CHROMA_DB_PATHS:
+    try:
+        clients[db_path] = chromadb.PersistentClient(path=db_path)
+        logger.info(f"✅ Connected to ChromaDB at {db_path}")
+    except Exception as e:
+        logger.error(f"❌ Failed to connect to ChromaDB at {db_path}: {e}")
 
 # Configure Gemini
 genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
 
-def get_collection():
-    """Get the merged collection"""
-    if not client:
-        logger.error("ChromaDB client not initialized")
-        return None
+def get_collections():
+    """Get all available collections from all 5 databases"""
+    all_collections = {}
+    for db_path, client in clients.items():
+        for collection_name in COLLECTIONS.get(db_path, []):
+            try:
+                collection = client.get_collection(name=collection_name)
+                all_collections[f"{collection_name}@{db_path}"] = collection
+                logger.info(f"✅ Found collection '{collection_name}' with {collection.count()} documents from {db_path}")
+            except Exception as e:
+                logger.warning(f"Collection '{collection_name}' not found in {db_path}: {e}")
 
-    try:
-        collection = client.get_collection(name=COLLECTION_NAME)
-        doc_count = collection.count()
-        logger.info(f"✅ Connected to collection '{COLLECTION_NAME}' with {doc_count} documents")
-        return collection
-    except Exception as e:
-        logger.error(f"❌ Collection '{COLLECTION_NAME}' not found: {e}")
-        return None
+    if not all_collections:
+        logger.error("No collections found. ChromaDB databases may be empty.")
+
+    return all_collections
 
 def get_recircle_info(query: str) -> str:
     """Get ReCircle company information based on query"""
@@ -235,14 +238,14 @@ def get_fallback_questions(user_query: str, previous_suggestions: list = None) -
         return filtered[:3] if filtered else questions[:2]
 
 def find_best_answer(user_query: str, intent_result=None, previous_suggestions: list = None) -> dict:
-    logger.info(f"🔍 Searching for query: {user_query[:100]}...")
+    logger.info(f"🔍 Searching ALL 5 DATABASES for query: {user_query[:100]}...")
     previous_suggestions = previous_suggestions or []
 
-    collection = get_collection()
-    if not collection:
-        logger.warning("Collection not available")
+    collections = get_collections()
+    if not collections:
+        logger.warning("No collections available")
         return {
-            "answer": "Database not ready. Please run the data update first using: python run_data_update.py",
+            "answer": "Database not ready. Please process PDFs first using gemini_pdf_processor.py.",
             "suggestions": [],
             "source_info": {}
         }
@@ -266,39 +269,47 @@ def find_best_answer(user_query: str, intent_result=None, previous_suggestions: 
 
     all_results = []
 
-    # Query the merged collection using embedding
-    try:
-        results = collection.query(
-            query_embeddings=[query_embedding],
-            n_results=10  # Get more results for better matching
-        )
+    # Query ALL collections from all 5 databases using embedding
+    for collection_name, collection in collections.items():
+        try:
+            results = collection.query(
+                query_embeddings=[query_embedding],
+                n_results=10  # Get more results for better matching
+            )
 
-        if results['documents'][0]:
-            for i, doc in enumerate(results['documents'][0]):
-                metadata = results['metadatas'][0][i] if results['metadatas'] else {}
-                # Fix source fallback
-                source = metadata.get('source', 'unknown')
-                if source == 'unknown' or not source:
-                    # Use merged collection as source
-                    source = 'EPR_Knowledge_Base'
+            if results['documents'][0]:
+                for i, doc in enumerate(results['documents'][0]):
+                    metadata = results['metadatas'][0][i] if results['metadatas'] else {}
+                    # Fix source fallback
+                    source = metadata.get('source', 'unknown')
+                    if source == 'unknown' or not source:
+                        # Try to extract from collection name or use fallback
+                        if 'EPR-chatbot' in collection_name:
+                            source = 'EPR_Knowledge_Base'
+                        elif 'EPRChatbot-1' in collection_name:
+                            source = 'EPR_Regulations'
+                        elif 'FinalDB' in collection_name:
+                            source = 'EPR_Comprehensive_Database'
+                        else:
+                            source = f'{collection_name}_documents'
 
-                all_results.append({
-                    'document': doc,
-                    'distance': results['distances'][0][i] if results['distances'] else 0,
-                    'collection': COLLECTION_NAME,
-                    'metadata': metadata,
-                    'chunk_id': metadata.get('chunk_id', i),
-                    'source': source,
-                    'pdf_index': metadata.get('pdf_index', 0)
-                })
+                    all_results.append({
+                        'document': doc,
+                        'distance': results['distances'][0][i] if results['distances'] else 0,
+                        'collection': collection_name,
+                        'metadata': metadata,
+                        'chunk_id': metadata.get('chunk_id', i),
+                        'source': source,
+                        'pdf_index': metadata.get('pdf_index', 0)
+                    })
 
-            logger.info(f"📚 Found {len(results['documents'][0])} results from '{COLLECTION_NAME}' collection")
-            for i, doc in enumerate(results['documents'][0]):
-                metadata = results['metadatas'][0][i] if results['metadatas'] else {}
-                distance = results['distances'][0][i] if results['distances'] else 0
-                logger.info(f"  - Chunk {metadata.get('chunk_id', i)}: distance={distance:.4f}, source={metadata.get('source', 'unknown')}")
-    except Exception as e:
-        logger.error(f"Error querying collection '{COLLECTION_NAME}': {e}")
+                logger.info(f"📚 Found {len(results['documents'][0])} results from '{collection_name}' collection")
+                for i, doc in enumerate(results['documents'][0]):
+                    metadata = results['metadatas'][0][i] if results['metadatas'] else {}
+                    distance = results['distances'][0][i] if results['distances'] else 0
+                    logger.info(f"  - Chunk {metadata.get('chunk_id', i)}: distance={distance:.4f}, source={metadata.get('source', 'unknown')}")
+        except Exception as e:
+            logger.error(f"Error querying collection '{collection_name}': {e}")
     
     if not all_results:
         logger.warning("No results found for query")

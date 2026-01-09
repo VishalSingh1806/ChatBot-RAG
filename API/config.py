@@ -9,24 +9,30 @@ load_dotenv()
 # Get base directory (API folder)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# ChromaDB Configuration - NEW MERGED DATABASE
-# This is the intelligent, auto-updated database with latest CPCB data
-CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", os.path.join(BASE_DIR, "merged_chromadb"))
+# Base folder for all ChromaDB databases
+DB_FOLDER = os.path.join(BASE_DIR, "chroma_db", "drive-download-20260108T065146Z-3-001")
 
-# Collection name for the merged database
+# ALL 5 CHROMADB DATABASES - Now using all databases for comprehensive search
+CHROMA_DB_PATH_1 = os.getenv("CHROMA_DB_PATH_1", os.path.join(DB_FOLDER, "chromaDB"))
+CHROMA_DB_PATH_2 = os.getenv("CHROMA_DB_PATH_2", os.path.join(DB_FOLDER, "chromaDB1"))
+CHROMA_DB_PATH_3 = os.getenv("CHROMA_DB_PATH_3", os.path.join(DB_FOLDER, "DB1"))
+CHROMA_DB_PATH_4 = os.getenv("CHROMA_DB_PATH_4", os.path.join(DB_FOLDER, "UDB", "Updated_DB"))
+CHROMA_DB_PATH_5 = os.getenv("CHROMA_DB_PATH_5", os.path.join(DB_FOLDER, "Updated_DB", "Updated_DB"))
+
+# Merged database (optional - for reference)
+CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", os.path.join(BASE_DIR, "merged_chromadb"))
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", "EPR-Merged")
 
-# Legacy configuration (kept for backward compatibility, but not used by default)
-CHROMA_DB_PATH_1 = os.getenv("CHROMA_DB_PATH_1", r"C:\Users\visha\Downloads\chromaDB-20251112T052425Z-1-001\chromaDB\chromaDB")
-CHROMA_DB_PATH_2 = os.getenv("CHROMA_DB_PATH_2", r"C:\Users\visha\Downloads\chromaDB-20251112T052425Z-1-001\chromaDB\chromaDB1")
-CHROMA_DB_PATH_3 = os.getenv("CHROMA_DB_PATH_3", r"C:\Users\visha\Downloads\chromaDB-20251112T052425Z-1-001\chromaDB\DB1")
+# ALL DATABASE PATHS - Search will query ALL 5 databases
+CHROMA_DB_PATHS = [CHROMA_DB_PATH_1, CHROMA_DB_PATH_2, CHROMA_DB_PATH_3, CHROMA_DB_PATH_4, CHROMA_DB_PATH_5]
 
-# For backward compatibility - points to new merged database
-CHROMA_DB_PATHS = [CHROMA_DB_PATH]
+# Collections mapping for each database
 COLLECTIONS = {
     CHROMA_DB_PATH_1: ["EPR-chatbot"],
     CHROMA_DB_PATH_2: ["EPRChatbot-1"],
-    CHROMA_DB_PATH_3: ["FinalDB"]
+    CHROMA_DB_PATH_3: ["FinalDB"],
+    CHROMA_DB_PATH_4: ["updated_db"],
+    CHROMA_DB_PATH_5: ["updated_db"]
 }
 
 # PDF Documents path
