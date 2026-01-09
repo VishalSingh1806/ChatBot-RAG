@@ -27,11 +27,14 @@ class HybridSearchEngine:
         """
         logger.info(f"🔄 Hybrid search for: {query[:100]}...")
 
-        # Check if query requires real-time web search
-        is_time_sensitive = web_search_engine.is_time_sensitive_query(query)
+        # STEP 1: Use Gemini to understand and enhance query
+        enhanced_query = self._understand_query_with_gemini(query)
 
-        # Add context from previous questions
-        context_aware_query = self._add_conversation_context(query)
+        # STEP 2: Check if query requires real-time web search
+        is_time_sensitive = web_search_engine.is_time_sensitive_query(enhanced_query)
+
+        # STEP 3: Add context from previous questions
+        context_aware_query = self._add_conversation_context(enhanced_query)
 
         # Get database results (40%)
         db_results = find_best_answer(context_aware_query, intent_result, previous_suggestions)
@@ -87,7 +90,53 @@ class HybridSearchEngine:
             "suggestions": suggestions,
             "source_info": source_info
         }
-    
+
+    def _understand_query_with_gemini(self, query: str) -> str:
+        """Use Gemini to understand and enhance query before database search"""
+
+        prompt = f"""Analyze this user query and rewrite it for better database search.
+
+User Query: "{query}"
+
+Tasks:
+1. Normalize year formats (2023-2024 → 2023-24, 2024-2025 → 2024-25)
+2. Add EPR/plastic waste context if missing and query is EPR-related
+3. Expand abbreviations (PRO → Producer Responsibility Organization, CPCB → Central Pollution Control Board)
+4. Keep the original intent and meaning
+5. If query is already clear and specific, return it as-is
+
+Return ONLY the enhanced query, nothing else. No explanations.
+
+Examples:
+Input: "what about 2023-2024"
+Output: plastic waste EPR annual report filing deadline for 2023-24
+
+Input: "deadline for 2024-25"
+Output: plastic waste EPR annual report filing deadline for FY 2024-25
+
+Input: "PRO registration process"
+Output: Producer Responsibility Organization EPR registration process
+
+Input: "What documents are needed for EPR registration?"
+Output: What documents are needed for EPR registration?
+
+Enhanced Query:"""
+
+        try:
+            generation_config = genai.types.GenerationConfig(
+                temperature=0.1,  # Low temperature for consistency
+                top_p=0.8,
+                max_output_tokens=100
+            )
+            response = self.model.generate_content(prompt, generation_config=generation_config)
+            enhanced_query = response.text.strip().strip('"').strip()
+
+            logger.info(f"🧠 Query Understanding: '{query}' → '{enhanced_query}'")
+            return enhanced_query
+        except Exception as e:
+            logger.error(f"❌ Query understanding failed: {e}")
+            return query  # Fallback to original query on error
+
     def _add_conversation_context(self, query: str) -> str:
         """Add context from previous 5 questions to current query"""
         if not self.conversation_history:
