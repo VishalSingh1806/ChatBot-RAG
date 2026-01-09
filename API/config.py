@@ -9,15 +9,16 @@ load_dotenv()
 # Get base directory (API folder)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Base folder for all ChromaDB databases
+# Base folder for all ChromaDB databases (fallback only)
 DB_FOLDER = os.path.join(BASE_DIR, "chroma_db", "drive-download-20260108T065146Z-3-001")
 
-# ALL 5 CHROMADB DATABASES - Now using all databases for comprehensive search
-CHROMA_DB_PATH_1 = os.getenv("CHROMA_DB_PATH_1", os.path.join(DB_FOLDER, "chromaDB"))
-CHROMA_DB_PATH_2 = os.getenv("CHROMA_DB_PATH_2", os.path.join(DB_FOLDER, "chromaDB1"))
-CHROMA_DB_PATH_3 = os.getenv("CHROMA_DB_PATH_3", os.path.join(DB_FOLDER, "DB1"))
-CHROMA_DB_PATH_4 = os.getenv("CHROMA_DB_PATH_4", os.path.join(DB_FOLDER, "UDB", "Updated_DB"))
-CHROMA_DB_PATH_5 = os.getenv("CHROMA_DB_PATH_5", os.path.join(DB_FOLDER, "Updated_DB", "Updated_DB"))
+# ALL 5 CHROMADB DATABASES - Use environment variables first, then fallback to local
+# Priority: /var/lib/chatbot paths (from .env in Docker) > local paths
+CHROMA_DB_PATH_1 = os.getenv("CHROMA_DB_PATH_1") or os.path.join(DB_FOLDER, "chromaDB")
+CHROMA_DB_PATH_2 = os.getenv("CHROMA_DB_PATH_2") or os.path.join(DB_FOLDER, "chromaDB1")
+CHROMA_DB_PATH_3 = os.getenv("CHROMA_DB_PATH_3") or os.path.join(DB_FOLDER, "DB1")
+CHROMA_DB_PATH_4 = os.getenv("CHROMA_DB_PATH_4") or os.path.join(DB_FOLDER, "UDB", "Updated_DB")
+CHROMA_DB_PATH_5 = os.getenv("CHROMA_DB_PATH_5") or os.path.join(DB_FOLDER, "Updated_DB", "Updated_DB")
 
 # Merged database (optional - for reference)
 CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", os.path.join(BASE_DIR, "merged_chromadb"))

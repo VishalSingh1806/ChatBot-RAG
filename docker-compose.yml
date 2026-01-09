@@ -25,6 +25,8 @@ services:
       - /var/lib/chatbot/chromaDB:/var/lib/chatbot/chromaDB
       - /var/lib/chatbot/chromaDB1:/var/lib/chatbot/chromaDB1
       - /var/lib/chatbot/DB1:/var/lib/chatbot/DB1
+      - /var/lib/chatbot/UDB:/var/lib/chatbot/UDB
+      - /var/lib/chatbot/Updated_DB:/var/lib/chatbot/Updated_DB
     depends_on:
       - redis
   frontend:

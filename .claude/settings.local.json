@@ -57,7 +57,14 @@
       "Bash(docker-compose ps:*)",
       "Bash(docker exec:*)",
       "Bash(docker cp:*)",
-      "Bash(docker restart:*)"
+      "Bash(docker restart:*)",
+      "Bash(unzip:*)",
+      "Bash(docker ps:*)",
+      "Bash(/tmp/test.sqlite3)",
+      "Bash(rsync:*)",
+      "Bash(sudo rm:*)",
+      "Bash(sudo cp:*)",
+      "Bash(gcloud config set:*)"
     ],
     "deny": []
   }
