@@ -12,20 +12,23 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Base folder for all ChromaDB databases (fallback only)
 DB_FOLDER = os.path.join(BASE_DIR, "chroma_db", "drive-download-20260108T065146Z-3-001")
 
-# ALL 5 CHROMADB DATABASES - Use environment variables first, then fallback to local
-# Priority: /var/lib/chatbot paths (from .env in Docker) > local paths
+# ALL 6 CHROMADB DATABASES - Use environment variables first, then fallback to local
 CHROMA_DB_PATH_1 = os.getenv("CHROMA_DB_PATH_1") or os.path.join(DB_FOLDER, "chromaDB")
 CHROMA_DB_PATH_2 = os.getenv("CHROMA_DB_PATH_2") or os.path.join(DB_FOLDER, "chromaDB1")
 CHROMA_DB_PATH_3 = os.getenv("CHROMA_DB_PATH_3") or os.path.join(DB_FOLDER, "DB1")
-CHROMA_DB_PATH_4 = os.getenv("CHROMA_DB_PATH_4") or os.path.join(DB_FOLDER, "UDB", "Updated_DB")
-CHROMA_DB_PATH_5 = os.getenv("CHROMA_DB_PATH_5") or os.path.join(DB_FOLDER, "Updated_DB", "Updated_DB")
+CHROMA_DB_PATH_4 = os.getenv("CHROMA_DB_PATH_4") or os.path.join(DB_FOLDER, "Updated_DB", "Updated_DB")
+CHROMA_DB_PATH_5 = os.getenv("CHROMA_DB_PATH_5") or os.path.join(BASE_DIR, "chroma_db")
+CHROMA_DB_PATH_6 = os.getenv("CHROMA_DB_PATH_6") or os.path.join(BASE_DIR, "UDB", "UDB")
 
 # Merged database (optional - for reference)
 CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", os.path.join(BASE_DIR, "merged_chromadb"))
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", "EPR-Merged")
 
-# ALL DATABASE PATHS - Search will query ALL 5 databases
-CHROMA_DB_PATHS = [CHROMA_DB_PATH_1, CHROMA_DB_PATH_2, CHROMA_DB_PATH_3, CHROMA_DB_PATH_4, CHROMA_DB_PATH_5]
+# ALL DATABASE PATHS - Search will query ALL 6 databases
+CHROMA_DB_PATHS = [CHROMA_DB_PATH_1, CHROMA_DB_PATH_2, CHROMA_DB_PATH_3, CHROMA_DB_PATH_4, CHROMA_DB_PATH_5, CHROMA_DB_PATH_6]
+
+# UDB path for timeline queries (2024-25, 2025-26)
+UDB_PATH = CHROMA_DB_PATH_6
 
 # Collections mapping for each database
 COLLECTIONS = {
@@ -33,7 +36,8 @@ COLLECTIONS = {
     CHROMA_DB_PATH_2: ["EPRChatbot-1"],
     CHROMA_DB_PATH_3: ["FinalDB"],
     CHROMA_DB_PATH_4: ["updated_db"],
-    CHROMA_DB_PATH_5: ["updated_db"]
+    CHROMA_DB_PATH_5: ["pdf_docs"],
+    CHROMA_DB_PATH_6: ["Updated_DB"]  # Changed to uppercase to match new collection
 }
 
 # PDF Documents path

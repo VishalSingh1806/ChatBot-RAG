@@ -142,17 +142,13 @@ async def handle_query(request: Request, query: QueryRequest):
         suggestions_key = f"session:{session_id}:suggestions"
         previous_suggestions = redis_client.lrange(suggestions_key, 0, -1) or []
         
-        # Get search configuration
-        search_config = get_search_config()
-        search_mode = search_config.get_search_mode()
+        # Check if query is about 2024-25 or 2025-26 timeline
+        query_lower = query.text.lower()
+        is_timeline_query = any(year in query_lower for year in ['2024-25', '2024-2025', '2025-26', '2025-2026', 'fy 2024', 'fy 2025', 'fy2024', 'fy2025'])
         
-        # Use appropriate search method based on configuration
-        # Note: SEQUENTIAL_HYBRID currently falls back to regular HYBRID
-        if search_mode == SearchMode.SEQUENTIAL_HYBRID or search_mode == SearchMode.HYBRID:
-            result = find_hybrid_answer(query.text, intent_result, previous_suggestions)
-            final_answer = result["answer"]
-        else:
-            # Traditional search with LLM refinement
+        # For timeline queries: Use ONLY database search (no web, no LLM mixing)
+        if is_timeline_query:
+            logging.info(f"⏰ Timeline query detected - using database-only search")
             result = find_best_answer(query.text, intent_result, previous_suggestions)
             final_answer, intent_result, user_context = refine_with_gemini(
                 user_name=user_name,
@@ -163,6 +159,27 @@ async def handle_query(request: Request, query: QueryRequest):
                 session_id=session_id,
                 source_info=result.get("source_info", {})
             )
+        else:
+            # Get search configuration
+            search_config = get_search_config()
+            search_mode = search_config.get_search_mode()
+            
+            # Use appropriate search method based on configuration
+            if search_mode == SearchMode.SEQUENTIAL_HYBRID or search_mode == SearchMode.HYBRID:
+                result = find_hybrid_answer(query.text, intent_result, previous_suggestions)
+                final_answer = result["answer"]
+            else:
+                # Traditional search with LLM refinement
+                result = find_best_answer(query.text, intent_result, previous_suggestions)
+                final_answer, intent_result, user_context = refine_with_gemini(
+                    user_name=user_name,
+                    query=query.text,
+                    raw_answer=result["answer"],
+                    history=history,
+                    is_first_message=(len(history) == 0),
+                    session_id=session_id,
+                    source_info=result.get("source_info", {})
+                )
 
         from intent_detector import intent_detector
         engagement_score = intent_detector._calculate_engagement_score(query.text.lower(), history)

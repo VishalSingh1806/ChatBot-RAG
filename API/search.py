@@ -5,7 +5,7 @@ import logging
 import csv
 import random
 from dotenv import load_dotenv
-from config import CHROMA_DB_PATHS, COLLECTIONS
+from config import CHROMA_DB_PATHS, COLLECTIONS, UDB_PATH
 
 # Load environment variables
 load_dotenv()
@@ -238,8 +238,24 @@ def get_fallback_questions(user_query: str, previous_suggestions: list = None) -
         return filtered[:3] if filtered else questions[:2]
 
 def find_best_answer(user_query: str, intent_result=None, previous_suggestions: list = None) -> dict:
-    logger.info(f"🔍 Searching ALL 5 DATABASES for query: {user_query[:100]}...")
+    logger.info(f"🔍 Searching databases for query: {user_query[:100]}...")
     previous_suggestions = previous_suggestions or []
+    
+    # Check for timeline queries (2024-25, 2025-26) - use ONLY Updated_DB
+    query_lower = user_query.lower()
+    is_timeline_query = any(year in query_lower for year in ['2024-25', '2024-2025', '2025-26', '2025-2026', 'fy 2024', 'fy 2025', 'fy2024', 'fy2025'])
+    
+    # Check for consultant/help queries and return ReCircle info directly
+    is_consultant_query = any(word in query_lower for word in ['consultant', 'who can help', 'who will help', 'contact for epr', 'approach', 'service provider', 'expert'])
+    
+    if is_consultant_query:
+        contact_email = os.getenv("CONTACT_EMAIL", "info@recircle.in")
+        recircle_answer = f"You can contact ReCircle - India's leading EPR compliance partner.\n\nReCircle provides:\n• Complete EPR registration and licensing\n• Annual return filing\n• EPR certificate management\n• Compliance monitoring and reporting\n\n📞 Contact: 9004240004\n📧 Email: {contact_email}\n📍 Office: 3rd Floor, APML Tower, Goregaon, Mumbai"
+        return {
+            "answer": recircle_answer,
+            "suggestions": generate_related_questions(user_query, None, intent_result, previous_suggestions),
+            "source_info": {}
+        }
 
     collections = get_collections()
     if not collections:
@@ -269,27 +285,39 @@ def find_best_answer(user_query: str, intent_result=None, previous_suggestions: 
 
     all_results = []
 
-    # Query ALL collections from all 5 databases using embedding
-    for collection_name, collection in collections.items():
+    # If timeline query, search ONLY UDB (updated_db collection)
+    if is_timeline_query:
+        logger.info("⏰ Timeline query detected (2024-25/2025-26) - searching ONLY UDB first")
+        target_collections = {k: v for k, v in collections.items() if UDB_PATH in k}
+        if not target_collections:
+            logger.warning("UDB collection not found")
+            target_collections = collections  # Fallback to all
+    else:
+        # For other queries, search all databases EXCEPT UDB
+        logger.info("📚 Regular query - searching all databases EXCEPT UDB")
+        target_collections = {k: v for k, v in collections.items() if UDB_PATH not in k}
+
+    # Query collections using embedding
+    for collection_name, collection in target_collections.items():
         try:
             results = collection.query(
                 query_embeddings=[query_embedding],
-                n_results=10  # Get more results for better matching
+                n_results=10
             )
 
             if results['documents'][0]:
                 for i, doc in enumerate(results['documents'][0]):
                     metadata = results['metadatas'][0][i] if results['metadatas'] else {}
-                    # Fix source fallback
                     source = metadata.get('source', 'unknown')
                     if source == 'unknown' or not source:
-                        # Try to extract from collection name or use fallback
                         if 'EPR-chatbot' in collection_name:
                             source = 'EPR_Knowledge_Base'
                         elif 'EPRChatbot-1' in collection_name:
                             source = 'EPR_Regulations'
                         elif 'FinalDB' in collection_name:
                             source = 'EPR_Comprehensive_Database'
+                        elif 'updated_db' in collection_name:
+                            source = 'EPR_Updated_Database'
                         else:
                             source = f'{collection_name}_documents'
 
@@ -304,10 +332,6 @@ def find_best_answer(user_query: str, intent_result=None, previous_suggestions: 
                     })
 
                 logger.info(f"📚 Found {len(results['documents'][0])} results from '{collection_name}' collection")
-                for i, doc in enumerate(results['documents'][0]):
-                    metadata = results['metadatas'][0][i] if results['metadatas'] else {}
-                    distance = results['distances'][0][i] if results['distances'] else 0
-                    logger.info(f"  - Chunk {metadata.get('chunk_id', i)}: distance={distance:.4f}, source={metadata.get('source', 'unknown')}")
         except Exception as e:
             logger.error(f"Error querying collection '{collection_name}': {e}")
     
@@ -322,23 +346,32 @@ def find_best_answer(user_query: str, intent_result=None, previous_suggestions: 
     # Sort by distance (lower is better)
     all_results.sort(key=lambda x: x['distance'])
     
-    # Apply very low confidence threshold for Langflow compatibility
-    confidence_threshold = 0.001
-    distance_threshold = 1.5  # Reduced from 5.0 for better relevance
+    # Apply distance threshold - more lenient for timeline queries
+    distance_threshold = 2.0 if is_timeline_query else 1.5
     
     # Filter results by distance threshold
     filtered_results = [r for r in all_results if r['distance'] <= distance_threshold]
     
-    # If no results with threshold, use best available results
-    if not filtered_results and all_results:
-        logger.warning(f"⚠️ Using best available results (distance: {all_results[0]['distance']:.4f})")
-        filtered_results = all_results[:5]  # Increased from 3 to 5
+    # Check if valid match found
+    valid_match_found = len(filtered_results) > 0
     
-    if not filtered_results:
+    # For timeline queries: if no valid match in UDB, switch to LLM-only mode
+    if is_timeline_query and not filtered_results:
+        logger.warning(f"⚠️ Timeline query: No valid match in UDB (best distance: {all_results[0]['distance']:.4f} > threshold {distance_threshold})")
+        logger.info("🤖 Switching to LLM-only mode for most updated information")
         return {
-            "answer": "I don't have information about that topic.",
+            "answer": "",  # Empty answer signals LLM-only mode
             "suggestions": generate_related_questions(user_query),
-            "source_info": {}
+            "source_info": {"valid_match": False, "is_timeline_query": True}
+        }
+    
+    # For regular queries: if no valid match, mark for LLM-only mode
+    if not filtered_results:
+        logger.warning(f"⚠️ No valid match found (best distance: {all_results[0]['distance']:.4f} > threshold {distance_threshold})")
+        return {
+            "answer": "",  # Empty answer signals LLM-only mode
+            "suggestions": generate_related_questions(user_query),
+            "source_info": {"valid_match": False}
         }
     
     # Get best result
@@ -373,6 +406,7 @@ def find_best_answer(user_query: str, intent_result=None, previous_suggestions: 
             "collection_name": best_result['collection'],
             "chunk_id": best_result['chunk_id'],
             "source_document": best_result['source'],
-            "confidence_score": round(1 - best_result['distance'], 4)
+            "confidence_score": round(1 - best_result['distance'], 4),
+            "valid_match": True
         }
     }
