@@ -31,7 +31,7 @@ Thank you for chatting with us. For more details or assistance, please feel free
 Contact Information:
 Address: 3rd Floor, APML Tower, Vishveshwar Nagar Rd, Yashodham, Goregaon, Mumbai, Maharashtra 400063
 Phone: +91 90042 40004
-Email: info@recircle.in
+Email: {os.getenv('CONTACT_EMAIL', 'info@recircle.in')}
 
 Best regards,
 Team Recircle"""

@@ -5,12 +5,17 @@ from starlette.middleware.sessions import SessionMiddleware
 from contextlib import asynccontextmanager
 import logging
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 import uuid
 import asyncio
 from datetime import datetime
 from models import QueryRequest, QueryResponse, UserData
 from search import find_best_answer
 from hybrid_search import find_hybrid_answer
+from search_config import get_search_config, SearchMode
 from llm_refiner import refine_with_gemini
 from collect_data import collect_user_data, get_user_data_from_session, redis_client
 from lead_manager import lead_manager
@@ -50,13 +55,11 @@ app.add_middleware(
     path="/",
 )
 
-allow_origins = [
+allow_origins = os.getenv("ALLOWED_ORIGINS", "").split(",") if os.getenv("ALLOWED_ORIGINS") else [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:8080",
     "http://127.0.0.1:8080",
-    "http://192.168.1.108:5173",  # Network URL for frontend
-    "http://192.168.1.108:8080",  # Network URL for backend
     "http://34.173.78.39",
     "http://34.173.78.39:8080",
     "http://34.173.78.39:80",
@@ -64,6 +67,10 @@ allow_origins = [
     "https://rebot.recircle.in",
     "http://rebot.recircle.in:80",
     "https://rebot.recircle.in:443",
+    "http://recircle.in",
+    "https://recircle.in",
+    "http://www.recircle.in",
+    "https://www.recircle.in",
 ]
 app.add_middleware(
     CORSMiddleware,
@@ -135,9 +142,27 @@ async def handle_query(request: Request, query: QueryRequest):
         suggestions_key = f"session:{session_id}:suggestions"
         previous_suggestions = redis_client.lrange(suggestions_key, 0, -1) or []
         
-        # Always use hybrid search - 60% LLM + 40% Database
-        result = find_hybrid_answer(query.text, intent_result, previous_suggestions)
-        final_answer = result["answer"]
+        # Get search configuration
+        search_config = get_search_config()
+        search_mode = search_config.get_search_mode()
+        
+        # Use appropriate search method based on configuration
+        # Note: SEQUENTIAL_HYBRID currently falls back to regular HYBRID
+        if search_mode == SearchMode.SEQUENTIAL_HYBRID or search_mode == SearchMode.HYBRID:
+            result = find_hybrid_answer(query.text, intent_result, previous_suggestions)
+            final_answer = result["answer"]
+        else:
+            # Traditional search with LLM refinement
+            result = find_best_answer(query.text, intent_result, previous_suggestions)
+            final_answer, intent_result, user_context = refine_with_gemini(
+                user_name=user_name,
+                query=query.text,
+                raw_answer=result["answer"],
+                history=history,
+                is_first_message=(len(history) == 0),
+                session_id=session_id,
+                source_info=result.get("source_info", {})
+            )
 
         from intent_detector import intent_detector
         engagement_score = intent_detector._calculate_engagement_score(query.text.lower(), history)
@@ -413,7 +438,8 @@ async def trigger_contact_intent(request: Request):
         finalize_session(session_id)
         
         # Return response for user
-        response_message = f"Thank you for your interest! Our ReCircle team has been notified and will reach out to you shortly. Meanwhile, you can connect with us on:\n\n🌐 Website: https://recircle.in/\n📞 Call us: 9004240004\n📧 Email: info@recircle.in\n\nYou can also continue asking questions while you wait!"
+        contact_email = os.getenv("CONTACT_EMAIL", "info@recircle.in")
+        response_message = f"Thank you for your interest! Our ReCircle team has been notified and will reach out to you shortly. Meanwhile, you can connect with us on:\n\n🌐 Website: https://recircle.in/\n📞 Call us: 9004240004\n📧 Email: {contact_email}\n\nYou can also continue asking questions while you wait!"
         
         logging.info(f"✅ Backend notified + user response sent for session {session_id}")
         return {

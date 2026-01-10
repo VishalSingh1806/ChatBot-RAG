@@ -9,22 +9,31 @@ load_dotenv()
 # Get base directory (API folder)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# ChromaDB Configuration - All 5 databases
-CHROMA_DB_PATH_1 = os.getenv("CHROMA_DB_PATH_1", r"C:\Users\BHAKTI\OneDrive\Desktop\ReCircle\EPR ChatBot\chromaDB")
-CHROMA_DB_PATH_2 = os.getenv("CHROMA_DB_PATH_2", r"C:\Users\BHAKTI\OneDrive\Desktop\ReCircle\EPR ChatBot\chromaDB1")
-CHROMA_DB_PATH_3 = os.getenv("CHROMA_DB_PATH_3", r"C:\Users\BHAKTI\OneDrive\Desktop\ReCircle\EPR ChatBot\DB1")
-CHROMA_DB_PATH_4 = os.getenv("CHROMA_DB_PATH_4", r"C:\Users\BHAKTI\OneDrive\Desktop\ReCircle\EPR ChatBot\ChatBot-RAG\UDB\Updated_DB")
-CHROMA_DB_PATH_5 = os.getenv("CHROMA_DB_PATH_5", r"C:\Users\BHAKTI\OneDrive\Desktop\ReCircle\EPR ChatBot\ChatBot-RAG\Updated_DB\Updated_DB")
+# Base folder for all ChromaDB databases (fallback only)
+DB_FOLDER = os.path.join(BASE_DIR, "chroma_db", "drive-download-20260108T065146Z-3-001")
 
+# ALL 5 CHROMADB DATABASES - Use environment variables first, then fallback to local
+# Priority: /var/lib/chatbot paths (from .env in Docker) > local paths
+CHROMA_DB_PATH_1 = os.getenv("CHROMA_DB_PATH_1") or os.path.join(DB_FOLDER, "chromaDB")
+CHROMA_DB_PATH_2 = os.getenv("CHROMA_DB_PATH_2") or os.path.join(DB_FOLDER, "chromaDB1")
+CHROMA_DB_PATH_3 = os.getenv("CHROMA_DB_PATH_3") or os.path.join(DB_FOLDER, "DB1")
+CHROMA_DB_PATH_4 = os.getenv("CHROMA_DB_PATH_4") or os.path.join(DB_FOLDER, "UDB", "Updated_DB")
+CHROMA_DB_PATH_5 = os.getenv("CHROMA_DB_PATH_5") or os.path.join(DB_FOLDER, "Updated_DB", "Updated_DB")
+
+# Merged database (optional - for reference)
+CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", os.path.join(BASE_DIR, "merged_chromadb"))
+COLLECTION_NAME = os.getenv("COLLECTION_NAME", "EPR-Merged")
+
+# ALL DATABASE PATHS - Search will query ALL 5 databases
 CHROMA_DB_PATHS = [CHROMA_DB_PATH_1, CHROMA_DB_PATH_2, CHROMA_DB_PATH_3, CHROMA_DB_PATH_4, CHROMA_DB_PATH_5]
 
-# Collection names for each database
+# Collections mapping for each database
 COLLECTIONS = {
     CHROMA_DB_PATH_1: ["EPR-chatbot"],
     CHROMA_DB_PATH_2: ["EPRChatbot-1"],
     CHROMA_DB_PATH_3: ["FinalDB"],
     CHROMA_DB_PATH_4: ["updated_db"],
-    CHROMA_DB_PATH_5: ["Updated_DB"]
+    CHROMA_DB_PATH_5: ["updated_db"]
 }
 
 # PDF Documents path

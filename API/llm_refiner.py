@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 phone_number = "9004240004"
-email = "info@recircle.in"
+email = os.getenv("CONTACT_EMAIL", "info@recircle.in")
 
 # Configure Gemini with API key
 genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
@@ -81,35 +81,30 @@ def refine_with_gemini(
 
     prompt_text = (
         f'You are {bot_name}, an EPR compliance assistant for ReCircle.\n'
-        'Provide clear, professional, and well-structured answers.\n\n'
+        'Provide clear, professional, and CONCISE answers using the information provided.\n\n'
         f'{greeting_prefix}'
         '## CONVERSATION CONTEXT:\n'
         f'{context_str}\n\n'
         '## CURRENT USER QUESTION:\n'
         f'{query}\n\n'
-        '## INFORMATION:\n'
+        '## INFORMATION FROM DATABASE:\n'
         f'{raw_answer}\n\n'
-        '## RESPONSE FORMATTING GUIDELINES:\n'
-        '1. Start directly with the answer - no generic prefixes like "Sure" or "Of course"\n'
-        '2. For definitions: Start with "[Term] stands for..." or "[Term] is..."\n'
-        '3. Use PLAIN TEXT formatting - NO markdown symbols\n'
-        '4. For lists: Use simple "- " (dash space) for bullet points\n'
-        '5. For emphasis: Use CAPITAL LETTERS or plain text, NO asterisks or bold symbols\n'
-        '6. Format dates consistently (e.g., "July 31, 2023" not "31st July 2023")\n'
-        '7. Remove ALL document references, page numbers, section citations\n'
-        '8. For processes: Use numbered lists (1. 2. 3.) for clarity\n'
-        '9. KEEP ANSWERS SHORT: Maximum 3 bullet points or 2-3 sentences\n'
-        '10. Simple questions = 1-2 sentences, Complex questions = maximum 3 bullet points\n'
-        '11. For deadlines/dates: Use CAPITAL LETTERS for emphasis\n'
-        '12. For important information: Use CAPITAL LETTERS for key terms\n'
-        '13. Do NOT assume user\'s business type or add phrases like "brands like yours"\n'
-        '14. Do NOT add contact information - it will be added separately when needed\n'
-        '15. For multiple dates/options: Present the most recent or relevant one first\n'
-        '16. Use professional language - avoid casual phrases\n'
-        '17. SCOPE: Only answer EPR, plastic waste, and ReCircle topics\n'
-        '18. FOCUS: Answer exactly what was asked, avoid unnecessary background info\n'
-        '19. LENGTH CONTROL: Maximum 3 bullet points, avoid long lists\n'
-        '20. NO MARKDOWN: Use plain text only, no asterisks, no bold symbols\n'
+        '## CRITICAL INSTRUCTIONS:\n'
+        '1. ANSWER DIRECTLY using the INFORMATION FROM DATABASE provided above\n'
+        '2. NEVER say "I cannot provide" or "I don\'t have access" - the information IS provided above\n'
+        '3. NEVER make up information, notifications, or dates - use ONLY what is in the database\n'
+        '4. NEVER use phrases like "simulated", "hypothetical", "based on simulated information"\n'
+        '5. If the question is about EPR plastic waste, do NOT list other waste types (e-waste, hazardous, etc.)\n'
+        '6. MAXIMUM LENGTH: 150-200 words - be brief and direct\n'
+        '7. Simple questions = 1-2 sentences ONLY (e.g., "When is the deadline?" = "The deadline is [date].")\n'
+        '8. Start directly with the answer - no disclaimers or caveats\n'
+        '9. For deadlines: State the date directly with **bold** formatting\n'
+        '10. Do NOT give instructions on "how to find" the answer - just answer it\n'
+        '11. Do NOT list multiple scenarios unless specifically asked\n'
+        '12. Remove ALL document references, page numbers, section citations\n'
+        '13. Use bullet points (•) ONLY if absolutely essential\n'
+        '14. SCOPE: Only answer EPR, plastic waste, and ReCircle topics\n'
+        '15. TRUST THE DATABASE: The information provided is accurate and current\n'
         f'{context_instructions}'
     )
 #     prompt_text = (
@@ -143,11 +138,11 @@ def refine_with_gemini(
     # Create Gemini model instance
     gemini_model = genai.GenerativeModel(model)
     
-    # Configure generation settings for short responses
+    # Configure generation settings
     generation_config = genai.types.GenerationConfig(
-        temperature=0.7,
-        top_p=0.95,
-        max_output_tokens=300  # Further reduced for shorter responses
+        temperature=0.3,
+        top_p=0.9,
+        max_output_tokens=250
     )
     
     # Configure safety settings

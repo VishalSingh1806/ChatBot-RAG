@@ -14,17 +14,20 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize ChromaDB clients for all databases
+# Initialize ChromaDB clients for ALL 5 databases
 clients = {}
 for db_path in CHROMA_DB_PATHS:
-    clients[db_path] = chromadb.PersistentClient(path=db_path)
-    logger.info(f"✅ Connected to ChromaDB at {db_path}")
+    try:
+        clients[db_path] = chromadb.PersistentClient(path=db_path)
+        logger.info(f"✅ Connected to ChromaDB at {db_path}")
+    except Exception as e:
+        logger.error(f"❌ Failed to connect to ChromaDB at {db_path}: {e}")
 
 # Configure Gemini
 genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
 
 def get_collections():
-    """Get all available collections from all databases"""
+    """Get all available collections from all 5 databases"""
     all_collections = {}
     for db_path, client in clients.items():
         for collection_name in COLLECTIONS.get(db_path, []):
@@ -34,10 +37,10 @@ def get_collections():
                 logger.info(f"✅ Found collection '{collection_name}' with {collection.count()} documents from {db_path}")
             except Exception as e:
                 logger.warning(f"Collection '{collection_name}' not found in {db_path}: {e}")
-    
+
     if not all_collections:
         logger.error("No collections found. ChromaDB databases may be empty.")
-    
+
     return all_collections
 
 def get_recircle_info(query: str) -> str:
@@ -45,19 +48,26 @@ def get_recircle_info(query: str) -> str:
     query_lower = query.lower()
     
     if any(word in query_lower for word in ["contact", "details", "phone", "email", "reach"]):
-        return "📍 Mumbai Office: 3rd Floor, APML Tower, Vishveshwar Nagar Rd, Yashodham, Goregaon, Mumbai, Maharashtra 400063\n\n📞 Phone: 9004240004\n📧 Email: info@recircle.in"
+        contact_email = os.getenv("CONTACT_EMAIL", "info@recircle.in")
+        return f"📍 Mumbai Office: 3rd Floor, APML Tower, Vishveshwar Nagar Rd, Yashodham, Goregaon, Mumbai, Maharashtra 400063\n\n📞 Phone: 9004240004\n📧 Email: {contact_email}"
     elif any(word in query_lower for word in ["office", "location", "address", "mumbai", "where"]):
-        return "📍 ReCircle Office: 3rd Floor, APML Tower, Vishveshwar Nagar Rd, Yashodham, Goregaon, Mumbai, Maharashtra 400063\n\nFor office visits or meetings, please call ahead: 9004240004"
+        contact_email = os.getenv("CONTACT_EMAIL", "info@recircle.in")
+        return f"📍 Mumbai Office: 3rd Floor, APML Tower, Vishveshwar Nagar Rd, Yashodham, Goregaon, Mumbai, Maharashtra 400063\n\n📞 Phone: 9004240004\n📧 Email: {contact_email}"
     elif any(word in query_lower for word in ["participate", "join", "benefit", "work with", "partner"]):
-        return "ReCircle is India's leading EPR compliance and plastic waste management company. We help businesses achieve plastic neutrality through:\n\n• Complete EPR registration and compliance management\n• Plastic waste collection and recycling solutions\n• EPR certificate procurement\n• Annual return filing and documentation\n• Customized sustainability programs\n\nTo discuss how ReCircle can help your company, contact us at:\n📞 9004240004\n📧 info@recircle.in"
+        contact_email = os.getenv("CONTACT_EMAIL", "info@recircle.in")
+        return f"ReCircle is India's leading EPR compliance and plastic waste management company. We help businesses achieve plastic neutrality through:\n\n• Complete EPR registration and compliance management\n• Plastic waste collection and recycling solutions\n• EPR certificate procurement\n• Annual return filing and documentation\n• Customized sustainability programs\n\nTo discuss how ReCircle can help your company, contact us at:\n📞 9004240004\n📧 {contact_email}"
     elif any(word in query_lower for word in ["service", "offer", "provide", "do"]):
-        return "ReCircle offers comprehensive EPR compliance solutions:\n\n• EPR Registration & Licensing\n• Plastic Waste Collection & Recycling\n• EPR Certificate Management\n• Annual Return Filing\n• Compliance Monitoring & Reporting\n• Sustainability Consulting\n\nWe help businesses meet their Extended Producer Responsibility obligations efficiently and cost-effectively.\n\nContact: 9004240004 | info@recircle.in"
+        contact_email = os.getenv("CONTACT_EMAIL", "info@recircle.in")
+        return f"ReCircle offers comprehensive EPR compliance solutions:\n\n• EPR Registration & Licensing\n• Plastic Waste Collection & Recycling\n• EPR Certificate Management\n• Annual Return Filing\n• Compliance Monitoring & Reporting\n• Sustainability Consulting\n\nWe help businesses meet their Extended Producer Responsibility obligations efficiently and cost-effectively.\n\nContact: 9004240004 | {contact_email}"
     elif any(word in query_lower for word in ["help", "assistance", "support"]):
-        return "Our ReCircle team is ready to provide personalized EPR solutions tailored to your business needs."
+        contact_email = os.getenv("CONTACT_EMAIL", "info@recircle.in")
+        return f"Our ReCircle team is ready to provide personalized EPR solutions tailored to your business needs.\n\nContact: 9004240004 | {contact_email}"
     elif any(word in query_lower for word in ["what is", "who is", "about", "company"]):
-        return "ReCircle is India's leading Extended Producer Responsibility (EPR) compliance and plastic waste management company. We help businesses achieve plastic neutrality through comprehensive waste collection, recycling, and compliance solutions.\n\nOur services include EPR registration, certificate management, waste collection infrastructure, and complete compliance support.\n\nGet in touch: 📞 9004240004 | 📧 info@recircle.in"
+        contact_email = os.getenv("CONTACT_EMAIL", "info@recircle.in")
+        return f"ReCircle is India's leading Extended Producer Responsibility (EPR) compliance and plastic waste management company. We help businesses achieve plastic neutrality through comprehensive waste collection, recycling, and compliance solutions.\n\nOur services include EPR registration, certificate management, waste collection infrastructure, and complete compliance support.\n\nGet in touch: 📞 9004240004 | 📧 {contact_email}"
     else:
-        return "ReCircle specializes in EPR compliance, plastic waste management, and sustainability solutions for businesses across India.\n\nContact us: 9004240004 | info@recircle.in"
+        contact_email = os.getenv("CONTACT_EMAIL", "info@recircle.in")
+        return f"ReCircle specializes in EPR compliance, plastic waste management, and sustainability solutions for businesses across India.\n\nContact us: 9004240004 | {contact_email}"
 
 def generate_related_questions(user_query: str, search_results: list = None, intent_result=None, previous_suggestions: list = None) -> list:
     """Generate 2 dynamic questions + 1 static ReCircle contact question"""
@@ -228,9 +238,9 @@ def get_fallback_questions(user_query: str, previous_suggestions: list = None) -
         return filtered[:3] if filtered else questions[:2]
 
 def find_best_answer(user_query: str, intent_result=None, previous_suggestions: list = None) -> dict:
-    logger.info(f"🔍 Searching for query: {user_query[:100]}...")
+    logger.info(f"🔍 Searching ALL 5 DATABASES for query: {user_query[:100]}...")
     previous_suggestions = previous_suggestions or []
-    
+
     collections = get_collections()
     if not collections:
         logger.warning("No collections available")
@@ -239,7 +249,7 @@ def find_best_answer(user_query: str, intent_result=None, previous_suggestions: 
             "suggestions": [],
             "source_info": {}
         }
-    
+
     # Generate query embedding using Gemini
     try:
         result = genai.embed_content(
@@ -256,17 +266,17 @@ def find_best_answer(user_query: str, intent_result=None, previous_suggestions: 
             "suggestions": [],
             "source_info": {}
         }
-    
+
     all_results = []
-    
-    # Query all collections using embedding
+
+    # Query ALL collections from all 5 databases using embedding
     for collection_name, collection in collections.items():
         try:
             results = collection.query(
                 query_embeddings=[query_embedding],
                 n_results=10  # Get more results for better matching
             )
-            
+
             if results['documents'][0]:
                 for i, doc in enumerate(results['documents'][0]):
                     metadata = results['metadatas'][0][i] if results['metadatas'] else {}
@@ -282,7 +292,7 @@ def find_best_answer(user_query: str, intent_result=None, previous_suggestions: 
                             source = 'EPR_Comprehensive_Database'
                         else:
                             source = f'{collection_name}_documents'
-                    
+
                     all_results.append({
                         'document': doc,
                         'distance': results['distances'][0][i] if results['distances'] else 0,
@@ -292,7 +302,7 @@ def find_best_answer(user_query: str, intent_result=None, previous_suggestions: 
                         'source': source,
                         'pdf_index': metadata.get('pdf_index', 0)
                     })
-                    
+
                 logger.info(f"📚 Found {len(results['documents'][0])} results from '{collection_name}' collection")
                 for i, doc in enumerate(results['documents'][0]):
                     metadata = results['metadatas'][0][i] if results['metadatas'] else {}

@@ -1,0 +1,15 @@
+{
+  "original_documents": 7732,
+  "final_documents": 3464,
+  "duplicates_removed": 4268,
+  "deduplication_rate": "55.20%",
+  "source_databases": [
+    "chromaDB",
+    "chromaDB1",
+    "DB1"
+  ],
+  "merged_database_path": "C:\\Users\\visha\\Downloads\\chromaDB-20251112T052425Z-1-001\\chromaDB\\merged_chromadb",
+  "collection_name": "EPR-Merged",
+  "similarity_threshold": 0.95,
+  "method": "SQLite Direct Access + Gemini Deduplication"
+}

@@ -1,3 +1,6 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+sentence-transformers
 fastapi
 uvicorn[standard]
 redis
@@ -5,9 +8,7 @@ pydantic
 python-dotenv
 google-cloud-aiplatform
 pandas
-sentence-transformers
 scikit-learn
-torch
 itsdangerous
 starlette
 google-generativeai
@@ -17,3 +18,9 @@ pdfplumber
 langchain
 langchain-text-splitters
 reportlab
+beautifulsoup4
+requests
+schedule
+tqdm
+numpy
+urllib3

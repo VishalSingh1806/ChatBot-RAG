@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ReCircle Chatbot Widget</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: transparent;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ============================================ -->
+    <!-- ReCircle Chatbot Widget Embed Code          -->
+    <!-- Copy everything from here to end of script  -->
+    <!-- ============================================ -->
+    <script>
+    (function() {
+        // Create iframe element
+        var iframe = document.createElement('iframe');
+        iframe.id = 'recircle-chatbot-iframe';
+        iframe.src = 'https://rebot.recircle.in';
+        iframe.title = 'ReCircle Chatbot';
+
+        // Set iframe attributes for no border and transparent background
+        iframe.setAttribute('frameborder', '0');
+        iframe.setAttribute('scrolling', 'no');
+        iframe.setAttribute('allow', 'cross-origin');
+
+        // Inline styles - transparent background, full screen, no border
+        iframe.style.cssText =
+            'position: fixed;' +
+            'bottom: 0;' +
+            'right: 0;' +
+            'width: 100%;' +
+            'height: 100%;' +
+            'border: none;' +
+            'z-index: 999999;' +
+            'pointer-events: none;' +
+            'background: transparent;';
+
+        // Append to body
+        document.body.appendChild(iframe);
+
+        // Enable pointer events after iframe loads
+        iframe.addEventListener('load', function() {
+            iframe.style.pointerEvents = 'auto';
+            console.log('✅ ReCircle Chatbot loaded successfully!');
+        });
+
+        // Handle errors
+        iframe.addEventListener('error', function() {
+            console.error('❌ Failed to load ReCircle Chatbot');
+        });
+    })();
+    </script>
+    <!-- ============================================ -->
+    <!-- End of ReCircle Chatbot Widget Code         -->
+    <!-- ============================================ -->
+
+</body>
+</html>
