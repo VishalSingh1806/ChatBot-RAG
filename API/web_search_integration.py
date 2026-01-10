@@ -39,6 +39,16 @@ class WebSearchEngine:
         """Detect if query requires real-time web search"""
         query_lower = query.lower()
 
+        # Broader deadline detection - any query about deadlines or filing dates
+        deadline_terms = [
+            'deadline', 'last date', 'due date', 'filing date', 'filing deadline',
+            'annual report', 'annual return', 'filing', 'submit', 'when to file',
+            'date for filing', 'report filing', 'return filing'
+        ]
+
+        # Check if query is about deadlines/filing - always use web search
+        has_deadline_filing = any(term in query_lower for term in deadline_terms)
+
         # Check for deadline-related keywords
         has_deadline_keyword = any(keyword in query_lower for keyword in self.deadline_keywords)
 
@@ -49,7 +59,7 @@ class WebSearchEngine:
         has_filing_context = any(keyword in query_lower for keyword in
                                 ['annual return', 'filing', 'submit', 'report'])
 
-        return has_deadline_keyword or (has_year_mention and has_filing_context)
+        return has_deadline_filing or has_deadline_keyword or (has_year_mention and has_filing_context)
 
     def search_latest_info(self, query: str) -> Optional[Dict]:
         """

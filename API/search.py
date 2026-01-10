@@ -345,10 +345,10 @@ def find_best_answer(user_query: str, intent_result=None, previous_suggestions: 
     
     # Sort by distance (lower is better)
     all_results.sort(key=lambda x: x['distance'])
-    
+
     # Apply distance threshold - more lenient for timeline queries
     distance_threshold = 2.0 if is_timeline_query else 1.5
-    
+
     # Filter results by distance threshold
     filtered_results = [r for r in all_results if r['distance'] <= distance_threshold]
     

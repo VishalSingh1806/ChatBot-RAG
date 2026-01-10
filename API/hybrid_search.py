@@ -15,17 +15,42 @@ genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
 
 class HybridSearchEngine:
     def __init__(self):
-        self.llm_weight = 0.6  # 60% LLM
-        self.db_weight = 0.4   # 40% Database
+        # Read weights from environment variables, with fallback to defaults
+        self.llm_weight = float(os.getenv('LLM_WEIGHT', '0.3'))  # Default 30% LLM
+        self.db_weight = float(os.getenv('DB_WEIGHT', '0.7'))    # Default 70% Database
+
+        # Ensure weights sum to 1.0
+        total_weight = self.llm_weight + self.db_weight
+        if total_weight != 1.0:
+            self.llm_weight = self.llm_weight / total_weight
+            self.db_weight = self.db_weight / total_weight
+
+        logger.info(f"🔧 Hybrid Search Initialized: LLM={self.llm_weight*100:.0f}%, DB={self.db_weight*100:.0f}%")
+
         self.model = genai.GenerativeModel("gemini-2.0-flash-exp")
         self.conversation_history = []  # Store last 5 Q&A pairs
+        self.answer_cache = {}  # Cache for consistent answers to similar questions
+
+        # Cache configuration
+        self.cache_max_size = int(os.getenv('CACHE_MAX_SIZE', '100'))  # Max cached queries
+        self.cache_enabled = os.getenv('CACHE_ENABLED', 'true').lower() == 'true'
     
     def search(self, query: str, intent_result=None, previous_suggestions: list = None) -> Dict:
         """
-        Hybrid search combining LLM knowledge (60%) and database search (40%)
+        Hybrid search combining LLM knowledge and database search
         + Real-time web search for time-sensitive queries
+        + Answer caching for consistency
         """
         logger.info(f"🔄 Hybrid search for: {query[:100]}...")
+
+        # STEP 0: Check cache for consistent answers (only for non-time-sensitive queries)
+        cache_key = query.lower().strip()
+        if self.cache_enabled and cache_key in self.answer_cache:
+            # Don't use cache for time-sensitive queries
+            from web_search_integration import web_search_engine
+            if not web_search_engine.is_time_sensitive_query(query):
+                logger.info(f"✅ Cache hit for query: {query[:50]}...")
+                return self.answer_cache[cache_key]
 
         # STEP 1: Use Gemini to understand and enhance query
         enhanced_query = self._understand_query_with_gemini(query)
@@ -85,11 +110,17 @@ class HybridSearchEngine:
         # Generate suggestions using the same FAQ CSV logic as main search
         suggestions = generate_related_questions(query, [], intent_result, previous_suggestions)
 
-        return {
+        result = {
             "answer": hybrid_answer,
             "suggestions": suggestions,
             "source_info": source_info
         }
+
+        # Cache the result for non-time-sensitive queries
+        if self.cache_enabled and not is_time_sensitive:
+            self._cache_result(cache_key, result)
+
+        return result
 
     def _understand_query_with_gemini(self, query: str) -> str:
         """Use Gemini to understand and enhance query before database search"""
@@ -161,22 +192,22 @@ Enhanced Query:"""
     def _get_llm_knowledge(self, context_query: str, original_query: str) -> str:
         """Get LLM's knowledge about the query with conversation context"""
         prompt = f"""
-        As an EPR compliance expert, answer this query directly:
+        As an EPR compliance expert, answer this query:
 
         {context_query if len(self.conversation_history) > 0 else f"Query: {original_query}"}
 
-        CRITICAL RULES:
-        - Answer directly - NO "I don't have access" or disclaimers
-        - NEVER make up dates, notifications, or information
-        - NEVER use "simulated", "hypothetical", or "based on"
-        - If about EPR plastic waste, do NOT mention e-waste, hazardous waste, etc.
-        - KEEP IT SHORT: Maximum 100-150 words
+        RULES:
+        - If you know the answer with certainty, provide it directly and concisely
+        - If the question asks for specific dates, deadlines, or time-sensitive information that you're uncertain about,
+          respond with: "For the latest information on [topic], please check the CPCB portal at cpcb.nic.in or contact the EPR helpline."
+        - Focus ONLY on EPR plastic waste (do NOT mention e-waste, battery waste, etc.)
+        - Keep answers SHORT: Maximum 100-150 words
         - Simple questions = 1-2 sentence answers ONLY
-        - Start with the answer immediately
-        - No bullet points unless essential
-        - Use only factual information you know
+        - Start with the answer immediately (no preambles)
+        - Use bullet points only if listing 3+ items
+        - Be factual and helpful
 
-        Provide a direct, concise, factual answer:
+        Provide a clear, concise answer:
         """
         
         try:
@@ -226,31 +257,30 @@ Enhanced Query:"""
             Provide the database answer with any necessary formatting:
             """
         else:
-            # Regular 60% LLM, 40% Database for other queries
+            # Regular hybrid search with configurable weights
             combination_prompt = f"""
-            Create a direct answer using these sources:
+            Create a direct answer combining these sources:
 
-            LLM KNOWLEDGE (60% weight):
+            LLM KNOWLEDGE ({int(self.llm_weight*100)}% weight):
             {llm_knowledge}
 
-            DATABASE KNOWLEDGE (40% weight):
+            DATABASE KNOWLEDGE ({int(self.db_weight*100)}% weight):
             {db_answer}
 
             USER QUERY: {query}
 
-            CRITICAL RULES:
-            1. Answer directly - NO disclaimers or "I cannot provide"
-            2. NEVER invent dates, notifications, or information not in the sources above
-            3. NEVER use "simulated", "hypothetical", "based on simulated"
-            4. If asking about EPR plastic waste, do NOT list other waste types
-            5. MAXIMUM: 100-150 words total
-            6. Simple questions = 1-2 sentences ONLY (e.g., "deadline is [date]")
-            7. Trust the sources provided - they are accurate
-            8. Use database dates and facts as-is without modification
-            9. No bullet lists unless specifically needed
-            10. Clean up HTML entities (&quot; &amp; etc.)
+            RULES:
+            1. Combine both sources intelligently - prioritize database facts
+            2. If database has specific dates/facts, use them exactly as provided
+            3. If LLM suggests checking official sources, keep that guidance
+            4. Focus ONLY on EPR plastic waste (no other waste types)
+            5. Keep it concise: 100-150 words maximum
+            6. For simple yes/no or factual queries: 1-2 sentences only
+            7. Clean up any HTML entities (&quot; &amp; etc.)
+            8. Use bullet points only when listing 3+ distinct items
+            9. Start with the most relevant information first
 
-            Provide a direct, concise, factual answer:
+            Provide a clear, accurate, combined answer:
             """
         
         try:
@@ -269,15 +299,32 @@ Enhanced Query:"""
         """Simple fallback combination if LLM combination fails"""
         if not db_answer and not llm_knowledge:
             return "I don't have sufficient information to answer this query."
-        
+
         if not db_answer:
             return llm_knowledge
-        
+
         if not llm_knowledge:
             return db_answer
-        
+
         # Simple concatenation with priority indication
         return f"{llm_knowledge}\n\nAdditional Information: {db_answer}"
+
+    def _cache_result(self, cache_key: str, result: Dict):
+        """Store result in cache with size limit"""
+        # Implement simple LRU-like behavior: remove oldest if cache is full
+        if len(self.answer_cache) >= self.cache_max_size:
+            # Remove the first (oldest) entry
+            oldest_key = next(iter(self.answer_cache))
+            del self.answer_cache[oldest_key]
+            logger.info(f"🗑️ Cache full, removed oldest entry")
+
+        self.answer_cache[cache_key] = result
+        logger.info(f"💾 Cached result for query: {cache_key[:50]}...")
+
+    def clear_cache(self):
+        """Clear the answer cache"""
+        self.answer_cache.clear()
+        logger.info("🧹 Answer cache cleared")
 
 # Global instance
 hybrid_search_engine = HybridSearchEngine()

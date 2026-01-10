@@ -64,7 +64,9 @@
       "Bash(rsync:*)",
       "Bash(sudo rm:*)",
       "Bash(sudo cp:*)",
-      "Bash(gcloud config set:*)"
+      "Bash(gcloud config set:*)",
+      "Bash(sudo tail:*)",
+      "Bash(git rebase:*)"
     ],
     "deny": []
   }
