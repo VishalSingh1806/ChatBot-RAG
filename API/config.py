@@ -37,7 +37,7 @@ COLLECTIONS = {
     CHROMA_DB_PATH_3: ["FinalDB"],
     CHROMA_DB_PATH_4: ["updated_db"],
     CHROMA_DB_PATH_5: ["pdf_docs"],
-    CHROMA_DB_PATH_6: ["Updated_DB"]  # Changed to uppercase to match new collection
+    CHROMA_DB_PATH_6: ["Updated_DB"]
 }
 
 # PDF Documents path
@@ -46,10 +46,11 @@ PDF_DOCUMENTS_PATH = os.getenv("PDF_DOCUMENTS_PATH", os.path.join(BASE_DIR, ".."
 # Reports output directory
 REPORTS_OUTPUT_DIR = os.getenv("REPORTS_OUTPUT_DIR", os.path.join(BASE_DIR, "reports"))
 
-# Ensure the ChromaDB directories exist (skip external paths)
-for path in CHROMA_DB_PATHS:
-    if path.startswith(BASE_DIR):  # Only create directories within project
-        os.makedirs(path, exist_ok=True)
+# Redis configuration for caching
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+REDIS_DB = int(os.getenv("REDIS_DB", 0))
+REDIS_CACHE_TTL = int(os.getenv("REDIS_CACHE_TTL", 3600))  # 1 hour default
 
 # Ensure reports directory exists
 os.makedirs(REPORTS_OUTPUT_DIR, exist_ok=True)
