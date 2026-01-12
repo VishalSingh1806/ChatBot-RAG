@@ -9,8 +9,8 @@ load_dotenv()
 # Get base directory (API folder)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Base folder for all ChromaDB databases (fallback only)
-DB_FOLDER = os.path.join(BASE_DIR, "chroma_db", "drive-download-20260108T065146Z-3-001")
+# Base folder for all ChromaDB databases
+DB_FOLDER = r"C:\Users\BHAKTI\OneDrive\Desktop\ReCircle\EPR ChatBot"
 
 # ALL 6 CHROMADB DATABASES - Use environment variables first, then fallback to local
 CHROMA_DB_PATH_1 = os.getenv("CHROMA_DB_PATH_1") or os.path.join(DB_FOLDER, "chromaDB")
@@ -18,7 +18,7 @@ CHROMA_DB_PATH_2 = os.getenv("CHROMA_DB_PATH_2") or os.path.join(DB_FOLDER, "chr
 CHROMA_DB_PATH_3 = os.getenv("CHROMA_DB_PATH_3") or os.path.join(DB_FOLDER, "DB1")
 CHROMA_DB_PATH_4 = os.getenv("CHROMA_DB_PATH_4") or os.path.join(DB_FOLDER, "Updated_DB", "Updated_DB")
 CHROMA_DB_PATH_5 = os.getenv("CHROMA_DB_PATH_5") or os.path.join(BASE_DIR, "chroma_db")
-CHROMA_DB_PATH_6 = os.getenv("CHROMA_DB_PATH_6") or os.path.join(BASE_DIR, "UDB", "UDB")
+CHROMA_DB_PATH_6 = os.getenv("CHROMA_DB_PATH_6") or r"C:\Users\BHAKTI\Downloads\UDB-20260112T064020Z-3-001\UDB"
 
 # Merged database (optional - for reference)
 CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", os.path.join(BASE_DIR, "merged_chromadb"))
@@ -46,9 +46,10 @@ PDF_DOCUMENTS_PATH = os.getenv("PDF_DOCUMENTS_PATH", os.path.join(BASE_DIR, ".."
 # Reports output directory
 REPORTS_OUTPUT_DIR = os.getenv("REPORTS_OUTPUT_DIR", os.path.join(BASE_DIR, "reports"))
 
-# Ensure the ChromaDB directories exist
+# Ensure the ChromaDB directories exist (skip external paths)
 for path in CHROMA_DB_PATHS:
-    os.makedirs(path, exist_ok=True)
+    if path.startswith(BASE_DIR):  # Only create directories within project
+        os.makedirs(path, exist_ok=True)
 
 # Ensure reports directory exists
 os.makedirs(REPORTS_OUTPUT_DIR, exist_ok=True)
