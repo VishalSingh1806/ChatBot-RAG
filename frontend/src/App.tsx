@@ -662,18 +662,61 @@ function App() {
 
               {/* Messages */}
               {messages.map((msg, index) => {
-                // Convert URLs and emails to clickable links
-                const renderMessageWithLinks = (text: string) => {
-                  const urlRegex = /(https?:\/\/[^\s]+)/g;
-                  const emailRegex = /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/g;
-                  
-                  const parts = text.split(/(https?:\/\/[^\s]+|[a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/);
-                  
+                // Convert markdown formatting, URLs and emails to HTML
+                const renderMessageWithFormatting = (text: string) => {
+                  // First, split by newlines to preserve line breaks
+                  const lines = text.split('\n');
+
+                  return lines.map((line, lineIndex) => {
+                    // Process each line for markdown and links
+                    let processedLine: React.ReactNode[] = [];
+
+                    // Check if it's a bullet point
+                    const bulletMatch = line.match(/^(\s*[-*]\s+)(.*)/);
+                    if (bulletMatch) {
+                      const bulletContent = bulletMatch[2];
+                      processedLine = [
+                        <span key={`bullet-${lineIndex}`}>• </span>,
+                        ...processMarkdownAndLinks(bulletContent)
+                      ];
+                    } else {
+                      processedLine = processMarkdownAndLinks(line);
+                    }
+
+                    return (
+                      <React.Fragment key={lineIndex}>
+                        {processedLine}
+                        {lineIndex < lines.length - 1 && <br />}
+                      </React.Fragment>
+                    );
+                  });
+                };
+
+                const processMarkdownAndLinks = (text: string): React.ReactNode[] => {
+                  // Regex patterns for markdown and links
+                  const combinedRegex = /(\*\*[^*]+\*\*|\*[^*]+\*|https?:\/\/[^\s]+|[a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/g;
+
+                  const parts = text.split(combinedRegex);
+
                   return parts.map((part, i) => {
-                    if (urlRegex.test(part)) {
+                    // Bold: **text**
+                    if (part.startsWith('**') && part.endsWith('**')) {
+                      return <strong key={i}>{part.slice(2, -2)}</strong>;
+                    }
+                    // Italic: *text* (but not at word boundaries)
+                    else if (part.startsWith('*') && part.endsWith('*') && part.length > 2) {
+                      return <em key={i}>{part.slice(1, -1)}</em>;
+                    }
+                    // URLs
+                    else if (part.startsWith('http://') || part.startsWith('https://')) {
                       return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{part}</a>;
-                    } else if (emailRegex.test(part)) {
-                      return <a key={i} href={`mailto:${part}`} className="text-blue-600 hover:underline">{part}</a>;
+                    }
+                    // Emails
+                    else if (part.includes('@') && part.includes('.')) {
+                      const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+$/;
+                      if (emailRegex.test(part)) {
+                        return <a key={i} href={`mailto:${part}`} className="text-blue-600 hover:underline">{part}</a>;
+                      }
                     }
                     return <span key={i}>{part}</span>;
                   });
@@ -698,7 +741,7 @@ function App() {
                           ? 'bg-purple-100 text-gray-800'
                           : 'bg-white text-gray-800'
                       }`}>
-                        <p className="text-sm leading-relaxed whitespace-pre-line">{renderMessageWithLinks(msg.text)}</p>
+                        <div className="text-sm leading-relaxed">{renderMessageWithFormatting(msg.text)}</div>
                       </div>
                     </div>
                   </div>

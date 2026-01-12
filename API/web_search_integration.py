@@ -18,7 +18,15 @@ genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
 
 class WebSearchEngine:
     def __init__(self):
-        self.model = genai.GenerativeModel("gemini-2.0-flash-exp")
+        system_instruction = (
+            "You are an EPR compliance assistant. CRITICAL RULES: "
+            "1) For deadline queries: State ONLY the date (e.g., 'January 31, 2026') - nothing else. "
+            "2) Maximum 1-2 sentences for all responses. "
+            "3) NEVER say 'As of', 'based on', 'simulated', 'hypothetical', 'potential'. "
+            "4) Extract ONLY the specific information requested - no explanations. "
+            "5) If uncertain, say 'Not yet announced' - do NOT speculate."
+        )
+        self.model = genai.GenerativeModel("gemini-2.0-flash-exp", system_instruction=system_instruction)
 
         # Time-sensitive keywords that trigger web search
         self.deadline_keywords = [
@@ -37,29 +45,10 @@ class WebSearchEngine:
 
     def is_time_sensitive_query(self, query: str) -> bool:
         """Detect if query requires real-time web search"""
-        query_lower = query.lower()
-
-        # Broader deadline detection - any query about deadlines or filing dates
-        deadline_terms = [
-            'deadline', 'last date', 'due date', 'filing date', 'filing deadline',
-            'annual report', 'annual return', 'filing', 'submit', 'when to file',
-            'date for filing', 'report filing', 'return filing'
-        ]
-
-        # Check if query is about deadlines/filing - always use web search
-        has_deadline_filing = any(term in query_lower for term in deadline_terms)
-
-        # Check for deadline-related keywords
-        has_deadline_keyword = any(keyword in query_lower for keyword in self.deadline_keywords)
-
-        # Check for specific date/year mentions
-        has_year_mention = any(year in query_lower for year in ['2024', '2025', '2026'])
-
-        # Queries about annual returns, filing, compliance are often time-sensitive
-        has_filing_context = any(keyword in query_lower for keyword in
-                                ['annual return', 'filing', 'submit', 'report'])
-
-        return has_deadline_filing or has_deadline_keyword or (has_year_mention and has_filing_context)
+        # DISABLED: Gemini's web search grounding is not working properly
+        # It returns "Not yet announced" even when data exists in database
+        # Database + LLM refinement provides more accurate results
+        return False
 
     def search_latest_info(self, query: str) -> Optional[Dict]:
         """
@@ -81,21 +70,23 @@ class WebSearchEngine:
 
             Current date context: {datetime.now().strftime('%B %d, %Y')}
 
-            Provide:
-            1. Most recent deadline dates (with financial year)
-            2. Any extensions or updates
-            3. Official source/notification reference
-            4. Key details that are currently valid
+            CRITICAL INSTRUCTIONS:
+            1. For deadline queries: State ONLY the date - example: "January 31, 2026"
+            2. NO explanations, NO context, NO "as of", NO "based on"
+            3. Maximum 1-2 sentences ONLY
+            4. Use ONLY official government sources (CPCB, MoEF, EPR Portal)
+            5. If conflicting dates exist, use the most recent official notification
+            6. NEVER mention "simulated", "hypothetical", "potential", "likely"
+            7. If uncertain, say "Not yet announced" - do NOT speculate
 
-            Important: Only provide information from official government sources (CPCB, MoEF, EPR Portal).
-            If you find conflicting dates, mention the most recent official notification.
+            Provide ONLY the specific deadline date requested, nothing more.
             """
 
             # Use Gemini with Google Search grounding
             generation_config = genai.types.GenerationConfig(
-                temperature=0.1,
-                top_p=0.9,
-                max_output_tokens=1000
+                temperature=0.05,  # Lower temperature for more deterministic responses
+                top_p=0.7,
+                max_output_tokens=100  # Limit to prevent verbose responses
             )
 
             # Note: Gemini's grounding with Google Search
@@ -127,7 +118,7 @@ class WebSearchEngine:
         """
         try:
             combination_prompt = f"""
-            You are an EPR compliance expert. Combine these sources to answer the user's question.
+            You are an EPR compliance expert. Answer the user's question concisely.
 
             USER QUESTION: {query}
 
@@ -137,23 +128,23 @@ class WebSearchEngine:
             DATABASE KNOWLEDGE (Historical Context):
             {db_answer}
 
-            Instructions:
-            1. PRIORITIZE the web information as it contains the LATEST data
-            2. Start with the most current deadlines/dates from web search
-            3. Use database knowledge only for context or general information
-            4. If web info has specific dates, use those dates (they are current)
-            5. Clearly state "As of [current date/year]" when providing deadlines
-            6. If there are conflicting dates, trust the web information
-            7. Clean up HTML entities and format properly
-            8. Be specific about financial years (FY 2024-25, etc.)
+            CRITICAL INSTRUCTIONS:
+            1. For deadline queries: State ONLY the date from web info - Example: "January 31, 2026"
+            2. Maximum 1-2 sentences ONLY
+            3. NEVER say "As of [date]", "based on", "simulated", "hypothetical"
+            4. NEVER provide explanations, contexts, or qualifications
+            5. Trust web information as the latest source
+            6. Clean up HTML entities and format properly
+            7. Extract ONLY the specific information requested
+            8. If web info has the answer, use ONLY that - ignore database
 
-            Provide a clear, direct answer with latest information:
+            Provide the answer in the most concise form possible:
             """
 
             generation_config = genai.types.GenerationConfig(
-                temperature=0.1,
-                top_p=0.8,
-                max_output_tokens=1000
+                temperature=0.05,  # Lower temperature for concise responses
+                top_p=0.7,
+                max_output_tokens=100  # Limit to prevent verbose responses
             )
 
             response = self.model.generate_content(

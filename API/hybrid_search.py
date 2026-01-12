@@ -47,7 +47,6 @@ class HybridSearchEngine:
         cache_key = query.lower().strip()
         if self.cache_enabled and cache_key in self.answer_cache:
             # Don't use cache for time-sensitive queries
-            from web_search_integration import web_search_engine
             if not web_search_engine.is_time_sensitive_query(query):
                 logger.info(f"✅ Cache hit for query: {query[:50]}...")
                 return self.answer_cache[cache_key]

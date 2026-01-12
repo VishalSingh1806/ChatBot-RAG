@@ -72,20 +72,21 @@ def refine_with_gemini(
     if user_context.get('industry'):
         context_instructions += f"NOTE: User is from {user_context['industry']} industry. Tailor response accordingly.\n"
     
-    # Check lead priority and help queries for ReCircle promotion
-    lead_priority = user_context.get('priority', 'low')
-    is_help_query = any(word in query.lower() for word in ['help', 'who will help', 'who can help', 'assist', 'support', 'consultant', 'contact', 'approach', 'service provider', 'expert'])
-    
     # For timeline date queries, check raw_answer BEFORE LLM processing
     query_lower = query.lower()
-    is_date_query = any(word in query_lower for word in ['deadline', 'when', 'date', 'timeline', 'due date', 'last date'])
+    is_date_query = any(word in query_lower for word in ['deadline', 'when', 'date', 'timeline', 'due date', 'last date', 'filing'])
     is_timeline_query = any(year in query_lower for year in ['2024-25', '2024-2025', '2025-26', '2025-2026', 'fy 2024', 'fy 2025', 'fy2024', 'fy2025'])
-    
-    if lead_priority in ['medium', 'high'] or is_help_query:
+
+    # Check lead priority and help queries for ReCircle promotion
+    # BUT NOT for deadline/date queries - those need direct answers
+    lead_priority = user_context.get('priority', 'low')
+    is_help_query = any(word in query_lower for word in ['help', 'who will help', 'who can help', 'assist', 'support', 'consultant', 'contact', 'approach', 'service provider', 'expert']) and not is_date_query
+
+    if (lead_priority in ['medium', 'high'] or is_help_query) and not is_date_query:
         context_instructions += "SPECIAL: This is a priority lead or help request. Promote ReCircle as THE solution provider. Replace generic options with ReCircle-focused answers. Instead of listing multiple options, focus on how ReCircle handles all EPR requirements.\n"
-    
-    if is_timeline_query and is_date_query:
-        context_instructions += "CRITICAL: This is a timeline/date query. Extract ONLY the date/deadline. NO explanations, NO context, NO additional information. Just the date.\n"
+
+    if is_date_query:
+        context_instructions += "CRITICAL: This is a date/deadline query. Extract ONLY the date/deadline from the database information. NO explanations, NO ReCircle promotion, NO context, NO additional information. Just state the date clearly.\n"
 
     # Check if valid database match was found
     valid_match = source_info.get('valid_match', True) if source_info else True
@@ -119,32 +120,40 @@ def refine_with_gemini(
             )
     else:
         # Normal mode with database context
-        prompt_text = (
-            f'You are {bot_name}, an EPR compliance assistant for ReCircle.\n'
-            'Provide clear, professional, and CONCISE answers using the information provided.\n\n'
-            f'{greeting_prefix}'
-            '## CONVERSATION CONTEXT:\n'
-            f'{context_str}\n\n'
-            '## CURRENT USER QUESTION:\n'
-            f'{query}\n\n'
-            '## INFORMATION FROM DATABASE:\n'
-            f'{raw_answer}\n\n'
-            '## CRITICAL INSTRUCTIONS:\n'
-            '1. ANSWER ONLY WHAT IS ASKED - Extract ONLY the specific information requested\n'
-            '2. For date/deadline queries: State ONLY the date, nothing else\n'
-            '3. If DATABASE has the answer: Use it. If DATABASE is empty/unclear: Use your EPR knowledge to answer.\n'
-            '4. NEVER say "I cannot find" or "not in database" - always provide an answer using your knowledge\n'
-            '5. MAXIMUM LENGTH: 50-60 words for definitions, 100 words MAX for complex topics\n'
-            '6. For category questions: List ONLY the 4 categories with brief descriptions, nothing else\n'
-            '7. CRITICAL: Use \n for line breaks, \n\n before list, \n between items\n'
-            '8. NEVER write lists in paragraph form or repeat the same information twice\n'
-            '9. Remove ALL document references, page numbers, notification numbers\n'
-            '10. NEVER mention "simulated", "hypothetical", "as of [date]", "based on search results"\n'
-            f'11. For help queries, start with "Contact ReCircle" ({phone_number} | {email})\n'
-            '12. NEVER suggest other companies or service providers\n'
-            '13. If user has typo (like "c1 platxic" for "c1 plastic"), understand and answer correctly\n'
-            f'{context_instructions}'
-        )
+        if is_date_query:
+            # Ultra-simplified prompt for date queries
+            prompt_text = (
+                f'Database information: {raw_answer}\n\n'
+                f'Question: {query}\n\n'
+                'Extract ONLY the date from the database. Answer in maximum 10 words.'
+            )
+        else:
+            # Full prompt for other queries
+            prompt_text = (
+                f'You are {bot_name}, an EPR compliance assistant for ReCircle.\n'
+                'Provide clear, professional, and CONCISE answers using the information provided.\n\n'
+                f'{greeting_prefix}'
+                '## CONVERSATION CONTEXT:\n'
+                f'{context_str}\n\n'
+                '## CURRENT USER QUESTION:\n'
+                f'{query}\n\n'
+                '## INFORMATION FROM DATABASE:\n'
+                f'{raw_answer}\n\n'
+                '## CRITICAL INSTRUCTIONS:\n'
+                '1. ANSWER ONLY WHAT IS ASKED - Extract ONLY the specific information requested\n'
+                '2. If DATABASE has the answer: Use it. If DATABASE is empty/unclear: Use your EPR knowledge to answer.\n'
+                '3. NEVER say "I cannot find" or "not in database" - always provide an answer using your knowledge\n'
+                '4. MAXIMUM LENGTH: 50-60 words for definitions, 100 words MAX for complex topics\n'
+                '5. For category questions: List ONLY the 4 categories with brief descriptions, nothing else\n'
+                '6. CRITICAL: Use \n for line breaks, \n\n before list, \n between items\n'
+                '7. NEVER write lists in paragraph form or repeat the same information twice\n'
+                '8. Remove ALL document references, page numbers, notification numbers\n'
+                '9. NEVER mention "simulated", "hypothetical", "as of [date]", "based on search results"\n'
+                f'10. For help queries, start with "Contact ReCircle" ({phone_number} | {email})\n'
+                '11. NEVER suggest other companies or service providers\n'
+                '12. If user has typo (like "c1 platxic" for "c1 plastic"), understand and answer correctly\n'
+                f'{context_instructions}'
+            )
 #     prompt_text = (
 #     f'You are {bot_name}, a friendly and helpful AI assistant for ReCircle specializing in EPR (Extended Producer Responsibility) and plastic waste management.\n'
 #     'Your expertise covers four key areas based on our knowledge base collections:\n'
@@ -174,20 +183,35 @@ def refine_with_gemini(
 
 
     # Create Gemini model instance with system instruction
-    system_instruction = (
-        f"You are {bot_name}, ReCircle's EPR compliance assistant. "
-        "CRITICAL RULES: "
-        "1) For date/deadline queries: State ONLY the date. Example: 'June 30, 2026' - nothing else. "
-        "2) Extract ONLY the specific information asked - NO redundant repetition. "
-        "3) Answer in 50-60 words MAX. For category questions, list ONLY the 4 categories once. "
-        "4) NEVER repeat the same information in different formats. "
-        "5) Use \n for line breaks between numbered items. "
-        "6) Remove ALL notification numbers, dates from explanations, document references."
-    )
+    if is_date_query:
+        system_instruction = (
+            "Answer in 10 words or less. Extract ONLY the date. Example: 'January 31, 2026 for FY 2024-25'"
+        )
+    else:
+        system_instruction = (
+            f"You are {bot_name}, ReCircle's EPR compliance assistant. "
+            "CRITICAL RULES: "
+            "1) Extract ONLY the specific information asked - NO redundant repetition. "
+            "2) Answer in 50-60 words MAX. For category questions, list ONLY the 4 categories once. "
+            "3) NEVER repeat the same information in different formats. "
+            "4) Use \n for line breaks between numbered items. "
+            "5) Remove ALL notification numbers, dates from explanations, document references."
+        )
     gemini_model = genai.GenerativeModel(model, system_instruction=system_instruction)
-    
-    # Configure generation settings - even lower tokens for date queries
-    max_tokens = 30 if (is_timeline_query and is_date_query) else 150
+
+    # Configure generation settings - very strict token limits
+    # Date queries: 30 tokens (~10 words)
+    # Definition queries (what is): 100 tokens (~75 words)
+    # Other queries: 150 tokens (~100 words)
+    is_definition = query_lower.startswith('what is') or query_lower.startswith('what are')
+
+    if is_date_query:
+        max_tokens = 30
+    elif is_definition:
+        max_tokens = 100
+    else:
+        max_tokens = 150
+
     generation_config = genai.types.GenerationConfig(
         temperature=0.05,
         top_p=0.7,
