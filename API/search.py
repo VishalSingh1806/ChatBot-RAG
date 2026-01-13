@@ -5,7 +5,7 @@ import logging
 import csv
 import random
 from dotenv import load_dotenv
-from config import CHROMA_DB_PATHS, COLLECTIONS, UDB_PATH
+from config import CHROMA_DB_PATHS, COLLECTIONS, UDB_PATH, DB_PRIORITY_ORDER, ENABLE_PRIORITY_SEARCH, EARLY_STOP_THRESHOLD, EARLY_STOP_THRESHOLD_TIMELINE
 
 # Load environment variables
 load_dotenv()
@@ -237,6 +237,45 @@ def get_fallback_questions(user_query: str, previous_suggestions: list = None) -
         filtered = [q for q in questions if q not in previous_suggestions]
         return filtered[:3] if filtered else questions[:2]
 
+def get_priority_ordered_collections(collections: dict, is_timeline_query: bool, exclude_udb: bool = False) -> list:
+    """
+    Order collections by database priority (newest first) for early stopping search.
+
+    Args:
+        collections: Dictionary of all available collections {collection_key: collection_obj}
+        is_timeline_query: Whether this is a timeline query (2024-25, 2025-26)
+        exclude_udb: Whether to exclude UDB from the ordered list
+
+    Returns:
+        List of dicts with collection info ordered by priority (newest first)
+        Each dict contains: collection_key, collection_obj, priority, db_path, description, recency
+    """
+    from config import DB_PRIORITY_ORDER, UDB_PATH
+
+    priority_ordered = []
+
+    for db_config in DB_PRIORITY_ORDER:
+        db_path = db_config["path"]
+        priority = db_config["priority"]
+
+        # Skip UDB if exclude_udb is True
+        if exclude_udb and db_path == UDB_PATH:
+            continue
+
+        # Find collections that belong to this database
+        for collection_key, collection_obj in collections.items():
+            if db_path in collection_key:
+                priority_ordered.append({
+                    "collection_key": collection_key,
+                    "collection_obj": collection_obj,
+                    "priority": priority,
+                    "db_path": db_path,
+                    "description": db_config["description"],
+                    "recency": db_config["recency"]
+                })
+
+    return priority_ordered
+
 def find_best_answer(user_query: str, intent_result=None, previous_suggestions: list = None) -> dict:
     logger.info(f"🔍 Searching databases for query: {user_query[:100]}...")
     previous_suggestions = previous_suggestions or []
@@ -284,56 +323,138 @@ def find_best_answer(user_query: str, intent_result=None, previous_suggestions: 
         }
 
     all_results = []
+    best_db_distance = float('inf')  # Track best distance found so far
+    searched_databases = []  # Track which databases were searched
 
-    # If timeline query, search ONLY UDB (updated_db collection)
+    # If timeline query, search ONLY UDB (unchanged behavior)
     if is_timeline_query:
-        logger.info("⏰ Timeline query detected (2024-25/2025-26) - searching ONLY UDB first")
+        logger.info("⏰ Timeline query detected (2024-25/2025-26) - searching ONLY UDB")
         target_collections = {k: v for k, v in collections.items() if UDB_PATH in k}
         if not target_collections:
             logger.warning("UDB collection not found")
             target_collections = collections  # Fallback to all
+
+        # Query UDB collections (traditional sequential search)
+        for collection_name, collection in target_collections.items():
+            try:
+                results = collection.query(
+                    query_embeddings=[query_embedding],
+                    n_results=10
+                )
+
+                if results['documents'][0]:
+                    for i, doc in enumerate(results['documents'][0]):
+                        metadata = results['metadatas'][0][i] if results['metadatas'] else {}
+                        source = metadata.get('source', 'Updated_DB_Timeline')
+
+                        all_results.append({
+                            'document': doc,
+                            'distance': results['distances'][0][i] if results['distances'] else 0,
+                            'collection': collection_name,
+                            'metadata': metadata,
+                            'chunk_id': metadata.get('chunk_id', i),
+                            'source': source,
+                            'pdf_index': metadata.get('pdf_index', 0)
+                        })
+
+                    searched_databases.append(UDB_PATH)
+                    logger.info(f"📚 Found {len(results['documents'][0])} results from UDB")
+            except Exception as e:
+                logger.error(f"Error querying UDB collection '{collection_name}': {e}")
+
+    # For regular queries: Use priority-based early stopping search
     else:
-        # For other queries, search all databases EXCEPT UDB
-        logger.info("📚 Regular query - searching all databases EXCEPT UDB")
-        target_collections = {k: v for k, v in collections.items() if UDB_PATH not in k}
+        logger.info("📚 Regular query - using priority-based early stopping search")
 
-    # Query collections using embedding
-    for collection_name, collection in target_collections.items():
-        try:
-            results = collection.query(
-                query_embeddings=[query_embedding],
-                n_results=10
-            )
+        # Get collections excluding UDB, ordered by priority
+        if ENABLE_PRIORITY_SEARCH:
+            ordered_collections = get_priority_ordered_collections(collections, is_timeline_query, exclude_udb=True)
+            logger.info(f"🔍 Priority search enabled - will search {len(ordered_collections)} databases in order of recency")
+        else:
+            # Fallback to old behavior if priority search disabled
+            logger.info("⚠️ Priority search disabled - using traditional all-database search")
+            target_collections = {k: v for k, v in collections.items() if UDB_PATH not in k}
+            ordered_collections = [
+                {
+                    "collection_key": k,
+                    "collection_obj": v,
+                    "priority": 999,
+                    "db_path": "unknown",
+                    "description": "Legacy",
+                    "recency": "unknown"
+                }
+                for k, v in target_collections.items()
+            ]
 
-            if results['documents'][0]:
-                for i, doc in enumerate(results['documents'][0]):
-                    metadata = results['metadatas'][0][i] if results['metadatas'] else {}
-                    source = metadata.get('source', 'unknown')
-                    if source == 'unknown' or not source:
-                        if 'EPR-chatbot' in collection_name:
-                            source = 'EPR_Knowledge_Base'
-                        elif 'EPRChatbot-1' in collection_name:
-                            source = 'EPR_Regulations'
-                        elif 'FinalDB' in collection_name:
-                            source = 'EPR_Comprehensive_Database'
-                        elif 'updated_db' in collection_name:
-                            source = 'EPR_Updated_Database'
-                        else:
-                            source = f'{collection_name}_documents'
+        # Search databases in priority order with early stopping
+        for col_info in ordered_collections:
+            collection_name = col_info["collection_key"]
+            collection = col_info["collection_obj"]
+            db_path = col_info["db_path"]
+            priority = col_info["priority"]
+            recency = col_info["recency"]
 
-                    all_results.append({
-                        'document': doc,
-                        'distance': results['distances'][0][i] if results['distances'] else 0,
-                        'collection': collection_name,
-                        'metadata': metadata,
-                        'chunk_id': metadata.get('chunk_id', i),
-                        'source': source,
-                        'pdf_index': metadata.get('pdf_index', 0)
-                    })
+            try:
+                # Query this collection
+                results = collection.query(
+                    query_embeddings=[query_embedding],
+                    n_results=10
+                )
 
-                logger.info(f"📚 Found {len(results['documents'][0])} results from '{collection_name}' collection")
-        except Exception as e:
-            logger.error(f"Error querying collection '{collection_name}': {e}")
+                if results['documents'][0]:
+                    db_best_distance = float('inf')
+
+                    for i, doc in enumerate(results['documents'][0]):
+                        metadata = results['metadatas'][0][i] if results['metadatas'] else {}
+                        distance = results['distances'][0][i] if results['distances'] else 0
+
+                        # Determine source
+                        source = metadata.get('source', 'unknown')
+                        if source == 'unknown' or not source:
+                            if 'EPR-chatbot' in collection_name:
+                                source = 'EPR_Knowledge_Base'
+                            elif 'EPRChatbot-1' in collection_name:
+                                source = 'EPR_Regulations'
+                            elif 'FinalDB' in collection_name:
+                                source = 'EPR_Comprehensive_Database'
+                            elif 'updated_db' in collection_name:
+                                source = 'EPR_Updated_Database'
+                            else:
+                                source = f'{collection_name}_documents'
+
+                        all_results.append({
+                            'document': doc,
+                            'distance': distance,
+                            'collection': collection_name,
+                            'metadata': metadata,
+                            'chunk_id': metadata.get('chunk_id', i),
+                            'source': source,
+                            'pdf_index': metadata.get('pdf_index', 0),
+                            'db_priority': priority,
+                            'db_recency': recency
+                        })
+
+                        # Track best distance in this database
+                        if distance < db_best_distance:
+                            db_best_distance = distance
+
+                    searched_databases.append(db_path)
+                    logger.info(f"📚 Priority {priority} ({recency}): Found {len(results['documents'][0])} results from '{collection_name}', best distance: {db_best_distance:.4f}")
+
+                    # Early stopping logic (only if priority search enabled)
+                    if ENABLE_PRIORITY_SEARCH and db_best_distance < EARLY_STOP_THRESHOLD:
+                        remaining_dbs = len(ordered_collections) - len(searched_databases)
+                        logger.info(f"✅ Early stop triggered! Found excellent match (distance: {db_best_distance:.4f} < threshold: {EARLY_STOP_THRESHOLD}) in {recency} database")
+                        logger.info(f"🚫 Skipping {remaining_dbs} older databases")
+                        break  # Stop searching older databases
+                    else:
+                        if ENABLE_PRIORITY_SEARCH:
+                            logger.info(f"⏭️ No excellent match yet (best: {db_best_distance:.4f} >= threshold: {EARLY_STOP_THRESHOLD}), continuing to next database")
+
+            except Exception as e:
+                logger.error(f"Error querying collection '{collection_name}': {e}")
+
+        logger.info(f"🏁 Search completed. Searched {len(searched_databases)} database(s): {[db.split('/')[-1] for db in searched_databases]}")
     
     if not all_results:
         logger.warning("No results found for query")
@@ -407,6 +528,9 @@ def find_best_answer(user_query: str, intent_result=None, previous_suggestions: 
             "chunk_id": best_result['chunk_id'],
             "source_document": best_result['source'],
             "confidence_score": round(1 - best_result['distance'], 4),
-            "valid_match": True
+            "valid_match": True,
+            "db_priority": best_result.get('db_priority', 'N/A'),
+            "db_recency": best_result.get('db_recency', 'unknown'),
+            "searched_databases": len(searched_databases) if 'searched_databases' in locals() else 'N/A'
         }
     }

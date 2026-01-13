@@ -26,19 +26,19 @@ print(f"Current documents in UDB: {collection.count()}")
 # Updated timeline data for 2024-25 and 2025-26
 timeline_data = [
     {
-        "text": "For the financial year 2024-25 (April 1, 2024 – March 31, 2025), the deadline for filing the Plastic EPR Annual Return has been extended by the Central Pollution Control Board (CPCB) to November 30, 2025.",
+        "text": "For the financial year 2024-25 (April 1, 2024 – March 31, 2025), the deadline for filing the Plastic EPR Annual Return is January 31, 2026 as per CPCB notification.",
         "metadata": {"source": "CPCB_2024-25_Update", "year": "2024-25", "type": "annual_return_deadline"}
     },
     {
-        "text": "The annual report filing deadline for FY 2024-25 is November 30, 2025 as per CPCB notification.",
+        "text": "The annual report filing deadline for FY 2024-25 is January 31, 2026 as per CPCB notification.",
         "metadata": {"source": "CPCB_2024-25_Update", "year": "2024-25", "type": "annual_return_deadline"}
     },
     {
-        "text": "For the financial year 2025-26, the deadline for filing the Plastic EPR Annual Return is January 31, 2026.",
+        "text": "For the financial year 2025-26 (April 1, 2025 – March 31, 2026), the deadline for filing the Plastic EPR Annual Return is June 30, 2026 as per CPCB notification.",
         "metadata": {"source": "CPCB_2025-26_Update", "year": "2025-26", "type": "annual_return_deadline"}
     },
     {
-        "text": "The annual report filing deadline for FY 2025-26 is January 31, 2026.",
+        "text": "The annual report filing deadline for FY 2025-26 is June 30, 2026 as per CPCB notification.",
         "metadata": {"source": "CPCB_2025-26_Update", "year": "2025-26", "type": "annual_return_deadline"}
     },
     {
