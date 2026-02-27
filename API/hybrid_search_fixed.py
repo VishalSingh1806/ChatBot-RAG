@@ -17,7 +17,7 @@ class HybridSearchEngine:
     def __init__(self):
         self.llm_weight = 0.6
         self.db_weight = 0.4
-        self.model = genai.GenerativeModel("gemini-2.0-flash-exp")
+        self.model = genai.GenerativeModel("gemini-2.0-flash")
         self.conversation_history = []
         self.relevance_threshold = 0.6
     

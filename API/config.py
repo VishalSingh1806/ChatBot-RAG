@@ -57,8 +57,8 @@ COLLECTIONS = {
     CHROMA_DB_PATH_2: ["EPRChatbot-1"],
     CHROMA_DB_PATH_3: ["FinalDB"],
     CHROMA_DB_PATH_4: ["updated_db"],
-    CHROMA_DB_PATH_5: ["pdf_docs"],
-    CHROMA_DB_PATH_6: ["Updated_DB"]  # Changed to uppercase to match new collection
+    CHROMA_DB_PATH_5: ["EPR-Merged"],
+    CHROMA_DB_PATH_6: ["updated_db"]  # Lowercase to match actual collection name
 }
 
 # PDF Documents path

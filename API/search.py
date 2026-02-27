@@ -308,9 +308,10 @@ def find_best_answer(user_query: str, intent_result=None, previous_suggestions: 
     # Generate query embedding using Gemini
     try:
         result = genai.embed_content(
-            model="models/text-embedding-004",
+            model="models/gemini-embedding-001",
             content=user_query,
-            task_type="retrieval_query"
+            task_type="retrieval_query",
+            output_dimensionality=768
         )
         query_embedding = result['embedding']
         logger.info(f"📊 Generated query embedding (dim: {len(query_embedding)})")
@@ -497,17 +498,25 @@ def find_best_answer(user_query: str, intent_result=None, previous_suggestions: 
     
     # Get best result
     best_result = filtered_results[0]
-    
-    # Combine top results for comprehensive answer
-    combined_text = ""
-    for result in filtered_results[:3]:
-        doc = result['document']
-        if len(doc) > 30:
-            if combined_text:
-                combined_text += "\n\n"
-            combined_text += doc.strip()
-    
-    answer = combined_text if combined_text else filtered_results[0]['document']
+
+    # Check if this is a deadline/date query - return single best answer
+    is_deadline_query = any(word in user_query.lower() for word in
+                           ['deadline', 'last date', 'due date', 'filing date', 'when', 'arf', 'annual return'])
+
+    if is_deadline_query:
+        # For deadline queries: return only the best result to avoid repetition
+        answer = filtered_results[0]['document'].strip()
+    else:
+        # Combine top results for comprehensive answer (for non-deadline queries)
+        combined_text = ""
+        for result in filtered_results[:3]:
+            doc = result['document']
+            if len(doc) > 30:
+                if combined_text:
+                    combined_text += "\n\n"
+                combined_text += doc.strip()
+
+        answer = combined_text if combined_text else filtered_results[0]['document']
     
     # Check for ReCircle-specific queries
     query_lower = user_query.lower()

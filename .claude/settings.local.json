@@ -66,7 +66,16 @@
       "Bash(sudo cp:*)",
       "Bash(gcloud config set:*)",
       "Bash(sudo tail:*)",
-      "Bash(git rebase:*)"
+      "Bash(git rebase:*)",
+      "Bash(for dir in /var/lib/chatbot/chromaDB /var/lib/chatbot/chromaDB1 /var/lib/chatbot/DB1 /var/lib/chatbot/UDB/Updated_DB /var/lib/chatbot/Updated_DB/Updated_DB /var/lib/chatbot/chroma_db)",
+      "Bash(do echo '=== $dir ===' ls -lh $dir)",
+      "Bash(for db_file in /var/lib/chatbot/chromaDB/chroma.sqlite3 /var/lib/chatbot/chromaDB1/chroma.sqlite3 /var/lib/chatbot/DB1/chroma.sqlite3 /var/lib/chatbot/UDB/Updated_DB/chroma.sqlite3 /var/lib/chatbot/Updated_DB/Updated_DB/chroma.sqlite3 /var/lib/chatbot/chroma_db/chroma.sqlite3)",
+      "Bash(do echo '=== $db_file ===' sqlite3 $db_file \"SELECT name FROM sqlite_master WHERE type=''''table'''';\")",
+      "Bash(sudo chown:*)",
+      "Bash(docker inspect:*)",
+      "Bash(docker-compose restart:*)",
+      "Bash(docker start:*)",
+      "Bash(timeout 5 docker exec:*)"
     ],
     "deny": []
   }

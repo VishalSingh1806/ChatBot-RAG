@@ -60,21 +60,28 @@ async def monitor_inactivity():
             session_keys = redis_client.keys("session:*")
             for key in session_keys:
                 key_str = key.decode() if isinstance(key, bytes) else key
-                if ":chat" in key_str or ":thankyou_sent" in key_str or ":monitor_inactivity" in key_str:
+                if ":chat" in key_str or ":thankyou_sent" in key_str or ":monitor_inactivity" in key_str or ":backend_sent" in key_str or ":finalized" in key_str or ":suggestions" in key_str:
                     continue
-                
+
                 session_id = key_str.split(":")[1]
-                
+
                 # Only monitor sessions that are marked for monitoring
                 monitor_key = f"session:{session_id}:monitor_inactivity"
                 if not redis_client.exists(monitor_key):
                     continue
-                
+
                 thankyou_key = f"session:{session_id}:thankyou_sent"
                 if redis_client.exists(thankyou_key):
                     continue
-                
-                session_data = redis_client.hgetall(key)
+
+                # Check key type before calling hgetall
+                key_type = redis_client.type(key_str)
+                if isinstance(key_type, bytes):
+                    key_type = key_type.decode()
+                if key_type != "hash":
+                    continue
+
+                session_data = redis_client.hgetall(key_str)
                 if not session_data:
                     continue
                 

@@ -457,7 +457,7 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-transparent relative overflow-hidden">
+    <div className="bg-transparent relative" style={{ pointerEvents: 'none' }}>
       <style>{`
         @keyframes pulse-glow {
           0%, 100% {
@@ -477,7 +477,7 @@ function App() {
       `}</style>
       {/* Welcome Popup */}
       {showWelcomePopup && !isOpen && (
-        <div className="fixed bottom-24 right-5 z-40 animate-in slide-in-from-right-5 duration-500">
+        <div className="fixed bottom-24 right-5 z-40 animate-in slide-in-from-right-5 duration-500" style={{ pointerEvents: 'auto' }}>
           <div className="rounded-xl shadow-2xl p-3 relative" style={{
             maxWidth: '240px',
             background: 'linear-gradient(135deg, #01298a 0%, #0147d4 100%)',
@@ -498,7 +498,7 @@ function App() {
       )}
 
       {/* Chat Widget */}
-      <div className="fixed bottom-5 right-5 z-50">
+      <div className="fixed bottom-5 right-5 z-50" style={{ pointerEvents: 'auto' }}>
         {/* Chat Button */}
         {!isOpen && (
           <button

@@ -32,7 +32,7 @@ def categorize_with_gemini(content, source):
         )
         
         response = client.models.generate_content(
-            model="gemini-2.0-flash-exp",  # Use stable model with higher limits
+            model="gemini-2.0-flash",  # Use stable model with higher limits
             contents=contents,
             config=config
         )

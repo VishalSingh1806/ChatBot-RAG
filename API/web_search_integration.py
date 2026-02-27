@@ -26,7 +26,7 @@ class WebSearchEngine:
             "4) Extract ONLY the specific information requested - no explanations. "
             "5) If uncertain, say 'Not yet announced' - do NOT speculate."
         )
-        self.model = genai.GenerativeModel("gemini-2.0-flash-exp", system_instruction=system_instruction)
+        self.model = genai.GenerativeModel("gemini-2.0-flash", system_instruction=system_instruction)
 
         # Time-sensitive keywords that trigger web search
         self.deadline_keywords = [

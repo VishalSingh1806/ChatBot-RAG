@@ -4,12 +4,12 @@ set -e
 echo "🚀 Starting full deployment..."
 
 # ─── Step 0: Ensure shared network exists ───────────────────────────────────────
-echo "🌐 Ensuring Docker network 'chat-net' exists..."
-if ! sudo docker network inspect chat-net &>/dev/null; then
-  sudo docker network create chat-net
-  echo "✅ Created network 'chat-net'"
+echo "🌐 Ensuring Docker network 'chatbot-network' exists..."
+if ! sudo docker network inspect chatbot-network &>/dev/null; then
+  sudo docker network create chatbot-network
+  echo "✅ Created network 'chatbot-network'"
 else
-  echo "✅ Network 'chat-net' already present"
+  echo "✅ Network 'chatbot-network' already present"
 fi
 
 # ─── Step 1: Pre-cleanup ────────────────────────────────────────────────────────
@@ -62,7 +62,8 @@ echo "✅ Certificate installed at /etc/letsencrypt/live/$DOMAIN/"
 echo "🔴 Starting Redis container..."
 sudo docker run -d \
   --name chatbot-redis \
-  --network chat-net \
+  --network chatbot-network \
+  --network-alias redis \
   -p 6379:6379 \
   redis:alpine
 
@@ -76,10 +77,11 @@ sudo mkdir -p /var/lib/chatbot/chroma_db
 sudo docker build -t chatbot-api .
 sudo docker run -d \
   --name chatbot-api-container \
-  --network chat-net \
+  --network chatbot-network \
+  --network-alias api \
   --env-file .env \
   -e GOOGLE_APPLICATION_CREDENTIALS=/etc/keys/sa-key.json \
-  -e REDIS_HOST=chatbot-redis \
+  -e REDIS_HOST=redis \
   -e CHROMA_DB_PATH=/app/chroma_db \
   -v /etc/epr-chatbot/keys/sa-key.json:/etc/keys/sa-key.json:ro \
   -v /var/lib/chatbot/chroma_db:/app/chroma_db \
@@ -92,7 +94,7 @@ cd ../frontend
 sudo docker build -t chatbot-frontend .
 sudo docker run -d \
   --name chatbot-frontend-container \
-  --network chat-net \
+  --network chatbot-network \
   -p 3000:80 \
   chatbot-frontend
 

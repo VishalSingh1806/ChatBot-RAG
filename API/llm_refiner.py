@@ -20,7 +20,7 @@ email = os.getenv("CONTACT_EMAIL", "info@recircle.in")
 # Configure Gemini with API key
 genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
 
-model = "gemini-2.0-flash-exp"
+model = "gemini-2.0-flash"
 
 bot_name = "ReBot"
 intent_detector = IntentDetector()
@@ -140,18 +140,25 @@ def refine_with_gemini(
                 '## INFORMATION FROM DATABASE:\n'
                 f'{raw_answer}\n\n'
                 '## CRITICAL INSTRUCTIONS:\n'
-                '1. ANSWER ONLY WHAT IS ASKED - Extract ONLY the specific information requested\n'
-                '2. If DATABASE has the answer: Use it. If DATABASE is empty/unclear: Use your EPR knowledge to answer.\n'
-                '3. NEVER say "I cannot find" or "not in database" - always provide an answer using your knowledge\n'
-                '4. MAXIMUM LENGTH: 50-60 words for definitions, 100 words MAX for complex topics\n'
-                '5. For category questions: List ONLY the 4 categories with brief descriptions, nothing else\n'
-                '6. CRITICAL: Use \n for line breaks, \n\n before list, \n between items\n'
-                '7. NEVER write lists in paragraph form or repeat the same information twice\n'
-                '8. Remove ALL document references, page numbers, notification numbers\n'
-                '9. NEVER mention "simulated", "hypothetical", "as of [date]", "based on search results"\n'
-                f'10. For help queries, start with "Contact ReCircle" ({phone_number} | {email})\n'
-                '11. NEVER suggest other companies or service providers\n'
-                '12. If user has typo (like "c1 platxic" for "c1 plastic"), understand and answer correctly\n'
+                '1. ANSWER ONLY WHAT IS ASKED - Extract ONLY the specific information requested from the user question\n'
+                '2. COMPLETELY IGNORE any information in the database that is NOT directly relevant to answering the specific question\n'
+                '3. DO NOT add dates, deadlines, quarterly filing info, or any EPR certificate details unless the user SPECIFICALLY asks for them\n'
+                '4. FILTER OUT irrelevant context: If database includes quarterly deadlines (Q1, Q2, Q3, Q4) but user did not ask about them, OMIT entirely\n'
+                '5. If DATABASE has the answer: Use ONLY the directly relevant parts. If DATABASE is empty/unclear: Use your EPR knowledge to answer.\n'
+                '6. NEVER say "I cannot find" or "not in database" - always provide an answer using your knowledge\n'
+                '7. MAXIMUM LENGTH: 50-60 words for definitions, 100 words MAX for complex topics\n'
+                '8. For category questions: List ONLY the 4 categories with brief descriptions, nothing else\n'
+                '9. CRITICAL: Use \n for line breaks, \n\n before list, \n between items\n'
+                '10. NEVER write lists in paragraph form or repeat the same information twice\n'
+                '11. Remove ALL document references, page numbers, notification numbers\n'
+                '12. NEVER mention "simulated", "hypothetical", "as of [date]", "based on search results"\n'
+                f'13. For help queries, start with "Contact ReCircle" ({phone_number} | {email})\n'
+                '14. NEVER suggest other companies or service providers\n'
+                '15. If user mentions "C1" or "C2" or "C3" or "C4", refer to them as "Category 1", "Category 2", "Category 3", "Category 4" in your response\n'
+                '16. If user has typo (like "platxic" for "plastic"), understand and answer correctly\n'
+                '17. CRITICAL EXAMPLES:\n'
+                '    - User asks "what is EPR" → Answer definition ONLY, ignore any deadline/quarterly info in database\n'
+                '    - User asks "what is C1 plastic" → Answer "Category 1" definition ONLY, ignore certificate/filing deadlines\n'
                 f'{context_instructions}'
             )
 #     prompt_text = (
@@ -191,11 +198,14 @@ def refine_with_gemini(
         system_instruction = (
             f"You are {bot_name}, ReCircle's EPR compliance assistant. "
             "CRITICAL RULES: "
-            "1) Extract ONLY the specific information asked - NO redundant repetition. "
-            "2) Answer in 50-60 words MAX. For category questions, list ONLY the 4 categories once. "
-            "3) NEVER repeat the same information in different formats. "
-            "4) Use \n for line breaks between numbered items. "
-            "5) Remove ALL notification numbers, dates from explanations, document references."
+            "1) Extract ONLY the specific information asked - NO redundant repetition or extra context. "
+            "2) COMPLETELY IGNORE database information NOT relevant to the question (deadlines, quarterly info, certificate details). "
+            "3) DO NOT add dates, deadlines, Q1/Q2/Q3/Q4 quarterly filing info, or certificate details unless EXPLICITLY asked. "
+            "4) Answer in 50-60 words MAX. For category questions, list ONLY the 4 categories once. "
+            "5) NEVER repeat the same information in different formats. "
+            "6) Use \n for line breaks between numbered items. "
+            "7) Remove ALL notification numbers, dates from explanations, document references. "
+            "8) EXAMPLE: If user asks 'what is C1 plastic', answer definition only - DO NOT mention quarterly deadlines or certificates."
         )
     gemini_model = genai.GenerativeModel(model, system_instruction=system_instruction)
 
@@ -253,9 +263,46 @@ def refine_with_gemini(
             result = "I apologize, but I'm having trouble generating a response right now. Please try again."
 
     refined_answer = result.strip()
-    
-    # No post-processing - all answers come from database + LLM refinement
-    
+
+    # AGGRESSIVE POST-PROCESSING: Remove unwanted quarterly/deadline info if NOT asked for
+    if not is_date_query:
+        # Remove quarterly filing information (Q1, Q2, Q3, Q4 with dates)
+        import re
+
+        # NUCLEAR OPTION: Remove EVERYTHING after certain trigger phrases
+        trigger_phrases = [
+            r'EPR certificates?.*?must be obtained quarterly',
+            r'All registered entities must complete',
+            r'Importers must ensure barcode',
+            r'with deadlines for uploading',
+            r'with the following deadlines',
+        ]
+
+        for trigger in trigger_phrases:
+            # Find the trigger and remove everything after it
+            match = re.search(trigger, refined_answer, flags=re.IGNORECASE)
+            if match:
+                refined_answer = refined_answer[:match.start()].strip()
+                logger.info(f"🔪 Trimmed response at trigger: {trigger[:30]}...")
+                break
+
+        # Additional cleanup patterns for any remaining fragments
+        cleanup_patterns = [
+            r'(?:with|and) (?:specific )?deadlines.*?(?:\.|$)',
+            r'Q[1-4]\s*\([^)]+\)[:\s]*[^;\n]*',
+            r'The deadline for filing.*?(?:\.|$)',
+            r'Under the Plastic Waste Management Amendment Rules.*?\d{4}\)',
+            r'\n\s*•\s*Q[1-4].*?(?:\n|$)',
+        ]
+
+        for pattern in cleanup_patterns:
+            refined_answer = re.sub(pattern, '', refined_answer, flags=re.DOTALL | re.IGNORECASE | re.MULTILINE)
+
+        # Final cleanup
+        refined_answer = re.sub(r'\n\s*\n+', '\n\n', refined_answer)
+        refined_answer = re.sub(r'[,;:]\s*$', '.', refined_answer)
+        refined_answer = refined_answer.strip()
+
     # Update context window with bot response
     if session_id:
         context_window.update_response(session_id, refined_answer)

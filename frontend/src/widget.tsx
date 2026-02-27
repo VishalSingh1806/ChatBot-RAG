@@ -54,9 +54,7 @@ const ReCircleChatbot = {
     widgetRoot = ReactDOM.createRoot(widgetContainer);
     widgetRoot.render(
       <React.StrictMode>
-        <div style={{ pointerEvents: 'auto' }}>
-          <App />
-        </div>
+        <App />
       </React.StrictMode>
     );
 

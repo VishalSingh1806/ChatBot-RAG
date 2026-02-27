@@ -1,6 +1,7 @@
 import google.generativeai as genai
 import os
 import logging
+import re
 from typing import Dict, List, Optional
 from dotenv import load_dotenv
 from search import find_best_answer, generate_related_questions
@@ -27,7 +28,7 @@ class HybridSearchEngine:
 
         logger.info(f"🔧 Hybrid Search Initialized: LLM={self.llm_weight*100:.0f}%, DB={self.db_weight*100:.0f}%")
 
-        self.model = genai.GenerativeModel("gemini-2.0-flash-exp")
+        self.model = genai.GenerativeModel("gemini-2.0-flash")
         self.conversation_history = []  # Store last 5 Q&A pairs
         self.answer_cache = {}  # Cache for consistent answers to similar questions
 
@@ -64,8 +65,20 @@ class HybridSearchEngine:
         db_results = find_best_answer(context_aware_query, intent_result, previous_suggestions)
         db_answer = db_results.get("answer", "")
 
+        # Check if this is a deadline/date query - these should use database directly
+        is_deadline_query = any(word in query.lower() for word in ['deadline', 'last date', 'due date', 'filing date', 'when', 'arf', 'annual return'])
+
+        # FOR DEADLINE QUERIES: Use database answer directly without LLM mixing
+        if is_deadline_query and db_answer and len(db_answer) > 50:
+            logger.info(f"📅 Deadline query detected - using database answer directly")
+            hybrid_answer = db_answer
+            source_info = {
+                "hybrid_search": False,
+                "database_only": True,
+                "db_source": db_results.get("source_info", {})
+            }
         # FOR TIME-SENSITIVE QUERIES: Use web search + database
-        if is_time_sensitive:
+        elif is_time_sensitive:
             logger.info(f"⏰ Time-sensitive query detected - using web search")
             web_result = search_with_web(query, db_answer)
 
@@ -102,6 +115,64 @@ class HybridSearchEngine:
                 "db_weight": self.db_weight,
                 "db_source": db_results.get("source_info", {})
             }
+
+        # GEMINI-BASED INTELLIGENT FILTERING: Remove irrelevant content
+        if not is_deadline_query and len(hybrid_answer) > 150:
+            logger.info(f"🤖 Using Gemini to filter response (length: {len(hybrid_answer)} chars)")
+
+            filter_prompt = f"""You are a content filter. Your job is to remove ONLY the irrelevant parts from this answer.
+
+User asked: "{query}"
+
+Current answer:
+{hybrid_answer}
+
+INSTRUCTIONS:
+1. Keep ONLY the information that DIRECTLY answers the user's question
+2. REMOVE any information about:
+   - Quarterly filing deadlines (Q1, Q2, Q3, Q4)
+   - EPR certificate deadlines unless asked
+   - Annual return filing dates unless asked
+   - Barcode/QR code requirements unless asked
+   - Any dates or deadlines unless specifically asked
+3. Keep the answer SHORT - maximum 60 words
+4. Return ONLY the filtered answer, nothing else
+
+Filtered answer:"""
+
+            try:
+                filter_config = genai.types.GenerationConfig(
+                    temperature=0.1,
+                    max_output_tokens=100
+                )
+                filter_response = self.model.generate_content(filter_prompt, generation_config=filter_config)
+                filtered_answer = filter_response.text.strip()
+
+                if filtered_answer and len(filtered_answer) >= 30:
+                    original_len = len(hybrid_answer)
+                    hybrid_answer = filtered_answer
+                    logger.info(f"✅ Gemini filtered: {original_len} → {len(hybrid_answer)} chars")
+                else:
+                    logger.warning(f"⚠️ Gemini filter returned too short, keeping original")
+            except Exception as e:
+                logger.error(f"❌ Gemini filter failed: {e}")
+
+            # Additional cleanup patterns for any remaining fragments
+            cleanup_patterns = [
+                r'(?:with|and) (?:specific )?deadlines.*?(?:\.|$)',
+                r'Q[1-4]\s*\([^)]+\)[:\s]*[^;\n]*',
+                r'The deadline for filing.*?(?:\.|$)',
+                r'Under the Plastic Waste Management Amendment Rules.*?\d{4}\)',
+                r'\n\s*•\s*Q[1-4].*?(?:\n|$)',
+            ]
+
+            for pattern in cleanup_patterns:
+                hybrid_answer = re.sub(pattern, '', hybrid_answer, flags=re.DOTALL | re.IGNORECASE | re.MULTILINE)
+
+            # Final cleanup
+            hybrid_answer = re.sub(r'\n\s*\n+', '\n\n', hybrid_answer)
+            hybrid_answer = re.sub(r'[,;:]\s*$', '.', hybrid_answer)
+            hybrid_answer = hybrid_answer.strip()
 
         # Store this Q&A in conversation history
         self._update_conversation_history(query, hybrid_answer)
@@ -213,7 +284,7 @@ Enhanced Query:"""
             generation_config = genai.types.GenerationConfig(
                 temperature=0.2,
                 top_p=0.85,
-                max_output_tokens=200  # Limit to 100-150 words
+                max_output_tokens=80  # STRICT LIMIT: 60 words max
             )
             response = self.model.generate_content(prompt, generation_config=generation_config)
             return response.text.strip()
@@ -268,25 +339,39 @@ Enhanced Query:"""
 
             USER QUERY: {query}
 
-            RULES:
-            1. Combine both sources intelligently - prioritize database facts
-            2. If database has specific dates/facts, use them exactly as provided
-            3. If LLM suggests checking official sources, keep that guidance
-            4. Focus ONLY on EPR plastic waste (no other waste types)
-            5. Keep it concise: 100-150 words maximum
-            6. For simple yes/no or factual queries: 1-2 sentences only
-            7. Clean up any HTML entities (&quot; &amp; etc.)
-            8. Use bullet points only when listing 3+ distinct items
-            9. Start with the most relevant information first
+            CRITICAL INSTRUCTION - READ CAREFULLY:
+            The database contains extra information that is NOT relevant to the user's question.
+            Your job is to extract ONLY what answers the question and IGNORE everything else.
 
-            Provide a clear, accurate, combined answer:
+            USER QUESTION: {query}
+
+            RULES:
+            1. Answer in MAXIMUM 50 words - be extremely concise
+            2. If user asks "what is EPR" or "what is C1" - give ONLY the definition, nothing else
+            3. DO NOT include:
+               - Quarterly deadlines (Q1, Q2, Q3, Q4)
+               - EPR certificate filing dates
+               - Annual return deadlines
+               - Barcode/QR requirements
+               - Registration deadlines
+               UNLESS the user specifically asks about deadlines/dates
+            4. If database includes deadlines but user didn't ask - COMPLETELY IGNORE THEM
+            5. Think: "Did the user ask for this specific piece of information?" If NO, don't include it
+            6. Simple definition questions should get 1-2 sentence answers ONLY
+
+            EXAMPLES:
+            - User: "what is EPR" → Answer: "EPR is Extended Producer Responsibility where producers manage plastic waste lifecycle." STOP
+            - User: "what is C1" → Answer: "Category 1 plastic refers to rigid plastic packaging materials." STOP
+            - User: "when is deadline" → Now you can include deadline info
+
+            Extract ONLY the answer to "{query}" (max 50 words):
             """
         
         try:
             generation_config = genai.types.GenerationConfig(
-                temperature=0.2,
-                top_p=0.85,
-                max_output_tokens=200  # Limit to 100-150 words
+                temperature=0.1,  # Lower temperature for more focused answers
+                top_p=0.7,        # Lower top_p to reduce randomness
+                max_output_tokens=60  # ULTRA STRICT: 45 words absolute max
             )
             response = self.model.generate_content(combination_prompt, generation_config=generation_config)
             return response.text.strip()

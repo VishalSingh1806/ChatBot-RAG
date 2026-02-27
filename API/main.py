@@ -473,17 +473,29 @@ async def end_chat_session(request: Request):
         if "session_id" not in request.session:
             raise HTTPException(status_code=400, detail="Session not found")
         session_id = request.session["session_id"]
-        
+
         # Debug: Check chat logs before finalizing
         chat_key = f"session:{session_id}:chat"
         chat_count = redis_client.llen(chat_key)
         logging.info(f"🔍 Finalizing session {session_id} with {chat_count} chat messages")
-        
+
         finalize_session(session_id)
         return {"status": "success", "message": f"PDF report generated and emailed for session {session_id}"}
     except Exception as e:
         logging.error(f"❌ Error finalizing session: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to finalize session")
+
+@app.post("/admin/clear_cache")
+async def clear_cache():
+    """Clear the hybrid search cache - admin endpoint"""
+    try:
+        from hybrid_search import hybrid_search_engine
+        hybrid_search_engine.clear_cache()
+        logging.info("✅ Hybrid search cache cleared successfully")
+        return {"status": "success", "message": "Cache cleared successfully"}
+    except Exception as e:
+        logging.error(f"❌ Error clearing cache: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to clear cache")
 
 if __name__ == "__main__":
     import uvicorn

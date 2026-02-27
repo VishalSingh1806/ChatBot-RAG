@@ -3,16 +3,18 @@ version: '3.8'
 services:
   redis:
     image: "redis:alpine"
-    container_name: chatbot_redis
+    container_name: chatbot-redis
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    networks:
+      - chatbot-network
 
   api:
     build:
       context: ./API
-    container_name: chatbot_api
+    container_name: chatbot-api-container
     restart: always
     env_file:
       - ./API/.env
@@ -27,18 +29,28 @@ services:
       - /var/lib/chatbot/DB1:/var/lib/chatbot/DB1
       - /var/lib/chatbot/UDB:/var/lib/chatbot/UDB
       - /var/lib/chatbot/Updated_DB:/var/lib/chatbot/Updated_DB
+      - /var/lib/chatbot/chroma_db:/var/lib/chatbot/chroma_db
+    networks:
+      - chatbot-network
     depends_on:
       - redis
   frontend:
     build:
       context: ./frontend
-    container_name: chatbot_frontend
+    container_name: chatbot-frontend-container
     restart: always
     ports:
       # Map port 3000 on the host to container's port 80 (nginx on host proxies from 80 -> 3000)
       - "3000:80"
+    networks:
+      - chatbot-network
     depends_on:
-      - api
+      api:
+        condition: service_started
+
+networks:
+  chatbot-network:
+    driver: bridge
 
 volumes:
   redis_data:

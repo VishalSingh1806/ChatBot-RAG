@@ -34,8 +34,8 @@ class CPCBDataScraper:
         })
         self.session.verify = False  # Disable SSL verification for govt sites
 
-        # Gemini 2.0 experimental model
-        self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        # Gemini model
+        self.model = genai.GenerativeModel('gemini-2.0-flash')
 
     def fetch_page_content(self, url: str) -> Optional[str]:
         """Fetch webpage content safely"""

@@ -8,8 +8,8 @@ logger = logging.getLogger(__name__)
 # EPR Knowledge Base - Direct answers
 EPR_KNOWLEDGE = {
     "annual report filing": {
-        "answer": "The annual return for EPR compliance must be filed by 31st May each year for the previous financial year (April to March). Late filing attracts penalties.",
-        "keywords": ["annual", "return", "filing", "date", "deadline", "may", "31st"]
+        "answer": "The annual return for EPR compliance for FY 2024-25 must be filed by 31st January 2026. For subsequent years, the standard deadline is 30th June. Late filing attracts penalties and environmental compensation.",
+        "keywords": ["annual", "return", "filing", "date", "deadline", "may", "31st", "january", "2026", "2024-25"]
     },
     "epr registration": {
         "answer": "EPR registration is mandatory for producers, importers, and brand owners dealing with plastic packaging. Registration must be done on the CPCB portal with required documents and fees.",
