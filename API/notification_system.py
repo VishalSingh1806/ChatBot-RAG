@@ -2,13 +2,15 @@ import os
 import logging
 from datetime import datetime
 from typing import Dict
+from brevo_service import brevo_service
 
 class NotificationSystem:
     def __init__(self):
         pass
-        
+
     async def send_hot_lead_alert(self, lead_data: Dict):
-        """Log hot lead to terminal"""
+        """Send hot lead alert via Brevo email AND log to terminal"""
+        # Log to terminal
         logging.info(f"""
 🔥 HOT LEAD DETECTED!
 
@@ -26,6 +28,12 @@ Organization: {lead_data.get('organization', 'Not provided')}
 
 ⏰ Last Active: {lead_data.get('last_interaction', 'Unknown')}
         """)
-        logging.info(f"🚨 Hot lead alert logged for {lead_data.get('user_name', 'Unknown')}")
+
+        # Send email via Brevo
+        email_sent = await brevo_service.send_hot_lead_alert(lead_data)
+        if email_sent:
+            logging.info(f"✅ Hot lead email sent via Brevo for {lead_data.get('user_name', 'Unknown')}")
+        else:
+            logging.warning(f"⚠️ Hot lead email failed, but logged for {lead_data.get('user_name', 'Unknown')}")
 
 notification_system = NotificationSystem()

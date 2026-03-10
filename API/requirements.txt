@@ -24,3 +24,4 @@ schedule
 tqdm
 numpy
 urllib3
+sib-api-v3-sdk
