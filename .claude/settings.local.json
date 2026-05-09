@@ -75,7 +75,12 @@
       "Bash(docker inspect:*)",
       "Bash(docker-compose restart:*)",
       "Bash(docker start:*)",
-      "Bash(timeout 5 docker exec:*)"
+      "Bash(timeout 5 docker exec:*)",
+      "Bash(wait:*)",
+      "Bash(ip addr:*)",
+      "Bash(sudo nginx:*)",
+      "Bash(sudo certbot certificates:*)",
+      "Bash(sudo certbot renew:*)"
     ],
     "deny": []
   }

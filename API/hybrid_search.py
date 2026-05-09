@@ -1,4 +1,5 @@
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import os
 import logging
 import re
@@ -12,7 +13,8 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
+# Configure Gemini client
+gemini_client = genai.Client(api_key=os.getenv('GOOGLE_API_KEY'))
 
 class HybridSearchEngine:
     def __init__(self):
@@ -28,7 +30,7 @@ class HybridSearchEngine:
 
         logger.info(f"🔧 Hybrid Search Initialized: LLM={self.llm_weight*100:.0f}%, DB={self.db_weight*100:.0f}%")
 
-        self.model = genai.GenerativeModel("gemini-2.0-flash")
+        self.client = gemini_client
         self.conversation_history = []  # Store last 5 Q&A pairs
         self.answer_cache = {}  # Cache for consistent answers to similar questions
 
@@ -141,11 +143,15 @@ INSTRUCTIONS:
 Filtered answer:"""
 
             try:
-                filter_config = genai.types.GenerationConfig(
+                filter_config = types.GenerateContentConfig(
                     temperature=0.1,
                     max_output_tokens=100
                 )
-                filter_response = self.model.generate_content(filter_prompt, generation_config=filter_config)
+                filter_response = self.client.models.generate_content(
+                    model="gemini-2.0-flash",
+                    contents=filter_prompt,
+                    config=filter_config
+                )
                 filtered_answer = filter_response.text.strip()
 
                 if filtered_answer and len(filtered_answer) >= 30:
@@ -224,12 +230,16 @@ Output: What documents are needed for EPR registration?
 Enhanced Query:"""
 
         try:
-            generation_config = genai.types.GenerationConfig(
+            generation_config = types.GenerateContentConfig(
                 temperature=0.1,  # Low temperature for consistency
                 top_p=0.8,
                 max_output_tokens=100
             )
-            response = self.model.generate_content(prompt, generation_config=generation_config)
+            response = self.client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=prompt,
+                config=generation_config
+            )
             enhanced_query = response.text.strip().strip('"').strip()
 
             logger.info(f"🧠 Query Understanding: '{query}' → '{enhanced_query}'")
@@ -281,12 +291,16 @@ Enhanced Query:"""
         """
         
         try:
-            generation_config = genai.types.GenerationConfig(
+            generation_config = types.GenerateContentConfig(
                 temperature=0.2,
                 top_p=0.85,
                 max_output_tokens=80  # STRICT LIMIT: 60 words max
             )
-            response = self.model.generate_content(prompt, generation_config=generation_config)
+            response = self.client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=prompt,
+                config=generation_config
+            )
             return response.text.strip()
         except Exception as e:
             logger.error(f"LLM knowledge generation failed: {e}")
@@ -368,12 +382,16 @@ Enhanced Query:"""
             """
         
         try:
-            generation_config = genai.types.GenerationConfig(
+            generation_config = types.GenerateContentConfig(
                 temperature=0.1,  # Lower temperature for more focused answers
                 top_p=0.7,        # Lower top_p to reduce randomness
                 max_output_tokens=60  # ULTRA STRICT: 45 words absolute max
             )
-            response = self.model.generate_content(combination_prompt, generation_config=generation_config)
+            response = self.client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=combination_prompt,
+                config=generation_config
+            )
             return response.text.strip()
         except Exception as e:
             logger.error(f"Result combination failed: {e}")

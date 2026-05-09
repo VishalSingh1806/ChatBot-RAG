@@ -1,4 +1,5 @@
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from typing import List, Dict, Optional, Tuple
 import os
 import logging
@@ -17,8 +18,8 @@ load_dotenv()
 phone_number = "9004240004"
 email = os.getenv("CONTACT_EMAIL", "info@recircle.in")
 
-# Configure Gemini with API key
-genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
+# Configure Gemini client
+client = genai.Client(api_key=os.getenv('GOOGLE_API_KEY'))
 
 model = "gemini-2.0-flash"
 
@@ -207,8 +208,6 @@ def refine_with_gemini(
             "7) Remove ALL notification numbers, dates from explanations, document references. "
             "8) EXAMPLE: If user asks 'what is C1 plastic', answer definition only - DO NOT mention quarterly deadlines or certificates."
         )
-    gemini_model = genai.GenerativeModel(model, system_instruction=system_instruction)
-
     # Configure generation settings - very strict token limits
     # Date queries: 30 tokens (~10 words)
     # Definition queries (what is): 100 tokens (~75 words)
@@ -222,27 +221,39 @@ def refine_with_gemini(
     else:
         max_tokens = 150
 
-    generation_config = genai.types.GenerationConfig(
+    generation_config = types.GenerateContentConfig(
         temperature=0.05,
         top_p=0.7,
-        max_output_tokens=max_tokens
+        max_output_tokens=max_tokens,
+        system_instruction=system_instruction
     )
-    
+
     # Configure safety settings
     safety_settings = [
-        {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-        {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-        {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-        {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+        types.SafetySetting(
+            category="HARM_CATEGORY_HATE_SPEECH",
+            threshold="OFF"
+        ),
+        types.SafetySetting(
+            category="HARM_CATEGORY_DANGEROUS_CONTENT",
+            threshold="OFF"
+        ),
+        types.SafetySetting(
+            category="HARM_CATEGORY_SEXUALLY_EXPLICIT",
+            threshold="OFF"
+        ),
+        types.SafetySetting(
+            category="HARM_CATEGORY_HARASSMENT",
+            threshold="OFF"
+        ),
     ]
 
     result = ""
     try:
-        response = gemini_model.generate_content(
-            prompt_text,
-            generation_config=generation_config,
-            safety_settings=safety_settings,
-            stream=True
+        response = client.models.generate_content_stream(
+            model=model,
+            contents=prompt_text,
+            config=generation_config
         )
         
         for chunk in response:

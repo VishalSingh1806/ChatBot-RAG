@@ -1,5 +1,6 @@
 import chromadb
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import os
 import logging
 import csv
@@ -23,8 +24,8 @@ for db_path in CHROMA_DB_PATHS:
     except Exception as e:
         logger.error(f"❌ Failed to connect to ChromaDB at {db_path}: {e}")
 
-# Configure Gemini
-genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
+# Configure Gemini client
+client = genai.Client(api_key=os.getenv('GOOGLE_API_KEY'))
 
 def get_collections():
     """Get all available collections from all 5 databases"""
@@ -307,13 +308,15 @@ def find_best_answer(user_query: str, intent_result=None, previous_suggestions: 
 
     # Generate query embedding using Gemini
     try:
-        result = genai.embed_content(
+        result = client.models.embed_content(
             model="models/gemini-embedding-001",
             content=user_query,
-            task_type="retrieval_query",
-            output_dimensionality=768
+            config=types.EmbedContentConfig(
+                task_type="RETRIEVAL_QUERY",
+                output_dimensionality=768
+            )
         )
-        query_embedding = result['embedding']
+        query_embedding = result.embeddings[0].values
         logger.info(f"📊 Generated query embedding (dim: {len(query_embedding)})")
     except Exception as e:
         logger.error(f"Error generating query embedding: {e}")

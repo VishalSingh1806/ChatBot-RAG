@@ -5,7 +5,8 @@ Fetches latest deadlines, notifications, and updates from CPCB and official sour
 
 import os
 import logging
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from datetime import datetime
 from typing import Dict, Optional
 from dotenv import load_dotenv
@@ -14,11 +15,12 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
+# Configure Gemini client
+gemini_client = genai.Client(api_key=os.getenv('GOOGLE_API_KEY'))
 
 class WebSearchEngine:
     def __init__(self):
-        system_instruction = (
+        self.system_instruction = (
             "You are an EPR compliance assistant. CRITICAL RULES: "
             "1) For deadline queries: State ONLY the date (e.g., 'January 31, 2026') - nothing else. "
             "2) Maximum 1-2 sentences for all responses. "
@@ -26,7 +28,7 @@ class WebSearchEngine:
             "4) Extract ONLY the specific information requested - no explanations. "
             "5) If uncertain, say 'Not yet announced' - do NOT speculate."
         )
-        self.model = genai.GenerativeModel("gemini-2.0-flash", system_instruction=system_instruction)
+        self.client = gemini_client
 
         # Time-sensitive keywords that trigger web search
         self.deadline_keywords = [
@@ -83,17 +85,19 @@ class WebSearchEngine:
             """
 
             # Use Gemini with Google Search grounding
-            generation_config = genai.types.GenerationConfig(
+            generation_config = types.GenerateContentConfig(
                 temperature=0.05,  # Lower temperature for more deterministic responses
                 top_p=0.7,
-                max_output_tokens=100  # Limit to prevent verbose responses
+                max_output_tokens=100,  # Limit to prevent verbose responses
+                system_instruction=self.system_instruction
             )
 
             # Note: Gemini's grounding with Google Search
             # This requires the search grounding feature to be enabled
-            response = self.model.generate_content(
-                search_prompt,
-                generation_config=generation_config
+            response = self.client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=search_prompt,
+                config=generation_config
             )
 
             web_answer = response.text.strip()
@@ -141,15 +145,17 @@ class WebSearchEngine:
             Provide the answer in the most concise form possible:
             """
 
-            generation_config = genai.types.GenerationConfig(
+            generation_config = types.GenerateContentConfig(
                 temperature=0.05,  # Lower temperature for concise responses
                 top_p=0.7,
-                max_output_tokens=100  # Limit to prevent verbose responses
+                max_output_tokens=100,  # Limit to prevent verbose responses
+                system_instruction=self.system_instruction
             )
 
-            response = self.model.generate_content(
-                combination_prompt,
-                generation_config=generation_config
+            response = self.client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=combination_prompt,
+                config=generation_config
             )
 
             return response.text.strip()

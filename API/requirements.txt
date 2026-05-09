@@ -11,7 +11,7 @@ pandas
 scikit-learn
 itsdangerous
 starlette
-google-generativeai
+google-genai
 chromadb
 pypdf2
 pdfplumber
